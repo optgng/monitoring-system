@@ -1,0 +1,190 @@
+"use client"
+
+import type React from "react"
+
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import {
+  Bell,
+  Home,
+  LayoutDashboard,
+  LogOut,
+  Shield,
+  Users,
+  Cpu,
+  AlertTriangle,
+  FileText,
+  FileSearch,
+  ActivitySquare,
+  FileWarning,
+} from "lucide-react"
+import { getCurrentUser } from "@/lib/auth"
+
+interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {}
+
+export default function Sidebar({ className }: SidebarProps) {
+  const pathname = usePathname()
+  const userRole = getCurrentUser().role
+
+  return (
+    <div className={cn("pb-12 w-64 border-r bg-gray-100/40 dark:bg-gray-800/40", className)}>
+      <div className="space-y-4 py-4">
+        <div className="px-4 py-2">
+          <h2 className="mb-2 px-2 text-xl font-semibold tracking-tight flex items-center gap-2">
+            <Shield className="h-6 w-6" />
+            <span>Мониторинг</span>
+          </h2>
+          <div className="space-y-1">
+            <Button
+              variant={pathname === "/" ? "secondary" : "ghost"}
+              size="sm"
+              className="w-full justify-start"
+              asChild
+            >
+              <Link href="/">
+                <Home className="mr-2 h-4 w-4" />
+                Главная
+              </Link>
+            </Button>
+            <Button
+              variant={pathname === "/dashboards" ? "secondary" : "ghost"}
+              size="sm"
+              className="w-full justify-start"
+              asChild
+            >
+              <Link href="/dashboards">
+                <LayoutDashboard className="mr-2 h-4 w-4" />
+                Дашборды
+              </Link>
+            </Button>
+
+            {/* Отчеты - только для руководителей и администраторов */}
+            {(userRole === "manager" || userRole === "admin") && (
+              <Button
+                variant={pathname === "/reports" ? "secondary" : "ghost"}
+                size="sm"
+                className="w-full justify-start"
+                asChild
+              >
+                <Link href="/reports">
+                  <FileText className="mr-2 h-4 w-4" />
+                  Отчеты
+                </Link>
+              </Button>
+            )}
+
+            {/* Разделы, доступные только администраторам */}
+            {userRole === "admin" && (
+              <>
+                <Button
+                  variant={pathname === "/devices" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="w-full justify-start"
+                  asChild
+                >
+                  <Link href="/devices">
+                    <Cpu className="mr-2 h-4 w-4" />
+                    Устройства
+                  </Link>
+                </Button>
+                <Button
+                  variant={pathname === "/alerts" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="w-full justify-start"
+                  asChild
+                >
+                  <Link href="/alerts">
+                    <AlertTriangle className="mr-2 h-4 w-4" />
+                    Оповещения
+                  </Link>
+                </Button>
+              </>
+            )}
+
+            {/* Разделы, доступные только специалистам технической поддержки и администраторам */}
+            {(userRole === "support" || userRole === "admin") && (
+              <>
+                <Button
+                  variant={pathname === "/logs" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="w-full justify-start"
+                  asChild
+                >
+                  <Link href="/logs">
+                    <FileSearch className="mr-2 h-4 w-4" />
+                    Логи
+                  </Link>
+                </Button>
+                <Button
+                  variant={pathname === "/diagnostics" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="w-full justify-start"
+                  asChild
+                >
+                  <Link href="/diagnostics">
+                    <ActivitySquare className="mr-2 h-4 w-4" />
+                    Диагностика
+                  </Link>
+                </Button>
+                <Button
+                  variant={pathname === "/incidents" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="w-full justify-start"
+                  asChild
+                >
+                  <Link href="/incidents">
+                    <FileWarning className="mr-2 h-4 w-4" />
+                    Инциденты
+                  </Link>
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Раздел администрирования - только для администраторов */}
+        {userRole === "admin" && (
+          <div className="px-4 py-2">
+            <h2 className="mb-2 px-2 text-lg font-semibold tracking-tight">Администрирование</h2>
+            <div className="space-y-1">
+              <Button
+                variant={pathname === "/users" ? "secondary" : "ghost"}
+                size="sm"
+                className="w-full justify-start"
+                asChild
+              >
+                <Link href="/users">
+                  <Users className="mr-2 h-4 w-4" />
+                  Пользователи
+                </Link>
+              </Button>
+              <Button
+                variant={pathname === "/notifications" ? "secondary" : "ghost"}
+                size="sm"
+                className="w-full justify-start"
+                asChild
+              >
+                <Link href="/notifications">
+                  <Bell className="mr-2 h-4 w-4" />
+                  Уведомления
+                </Link>
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="mt-auto px-4 py-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20"
+        >
+          <LogOut className="mr-2 h-4 w-4" />
+          Выйти
+        </Button>
+      </div>
+    </div>
+  )
+}
