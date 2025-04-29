@@ -17,8 +17,6 @@ import {
   AlertTriangle,
   FileText,
   FileSearch,
-  ActivitySquare,
-  FileWarning,
 } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 
@@ -103,43 +101,19 @@ export default function Sidebar({ className }: SidebarProps) {
               </>
             )}
 
-            {/* Разделы, доступные только специалистам технической поддержки и администраторам */}
+            {/* Логи - доступны для специалистов технической поддержки и администраторов */}
             {(userRole === "support" || userRole === "admin") && (
-              <>
-                <Button
-                  variant={pathname === "/logs" ? "secondary" : "ghost"}
-                  size="sm"
-                  className="w-full justify-start"
-                  asChild
-                >
-                  <Link href="/logs">
-                    <FileSearch className="mr-2 h-4 w-4" />
-                    Логи
-                  </Link>
-                </Button>
-                <Button
-                  variant={pathname === "/diagnostics" ? "secondary" : "ghost"}
-                  size="sm"
-                  className="w-full justify-start"
-                  asChild
-                >
-                  <Link href="/diagnostics">
-                    <ActivitySquare className="mr-2 h-4 w-4" />
-                    Диагностика
-                  </Link>
-                </Button>
-                <Button
-                  variant={pathname === "/incidents" ? "secondary" : "ghost"}
-                  size="sm"
-                  className="w-full justify-start"
-                  asChild
-                >
-                  <Link href="/incidents">
-                    <FileWarning className="mr-2 h-4 w-4" />
-                    Инциденты
-                  </Link>
-                </Button>
-              </>
+              <Button
+                variant={pathname === "/logs" ? "secondary" : "ghost"}
+                size="sm"
+                className="w-full justify-start"
+                asChild
+              >
+                <Link href="/logs">
+                  <FileSearch className="mr-2 h-4 w-4" />
+                  Логи
+                </Link>
+              </Button>
             )}
           </div>
         </div>
