@@ -1,11 +1,12 @@
 import type React from "react"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import Sidebar from "@/components/sidebar"
-import Header from "@/components/header"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import ClientProviders from "@/components/providers/client-providers"
+import { SessionRefresh } from "@/components/session-refresh"
+import { SessionExpiredModal } from "@/components/session-expired-modal"
+import AuthLayout from "@/components/auth-layout"
 
 const inter = Inter({ subsets: ["latin", "cyrillic"] })
 
@@ -26,13 +27,9 @@ export default async function RootLayout({
     <html lang="ru" suppressHydrationWarning>
       <body className={`${inter.className} antialiased`}>
         <ClientProviders session={session}>
-          <div className="flex h-screen overflow-hidden">
-            <Sidebar />
-            <div className="flex flex-col flex-1 overflow-hidden">
-              <Header />
-              <main className="flex-1 overflow-auto p-4 bg-gray-50 dark:bg-gray-900">{children}</main>
-            </div>
-          </div>
+          <SessionRefresh />
+          <SessionExpiredModal />
+          <AuthLayout>{children}</AuthLayout>
         </ClientProviders>
       </body>
     </html>

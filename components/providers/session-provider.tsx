@@ -1,15 +1,26 @@
 "use client"
 
 import type React from "react"
+import { SessionProvider as NextAuthSessionProvider } from "next-auth/react"
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { handleSessionError } from "@/lib/auth-utils"
 
-import { SessionProvider } from "next-auth/react"
-
-export default function NextAuthProvider({
+export default function SessionProvider({
   children,
   session,
 }: {
   children: React.ReactNode
   session: any
 }) {
-  return <SessionProvider session={session}>{children}</SessionProvider>
+  const router = useRouter()
+
+  // Check for session errors on initial load
+  useEffect(() => {
+    if (session?.error) {
+      handleSessionError(session)
+    }
+  }, [session])
+
+  return <NextAuthSessionProvider session={session}>{children}</NextAuthSessionProvider>
 }

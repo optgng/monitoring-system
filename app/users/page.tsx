@@ -3,20 +3,24 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Edit, Lock, Unlock } from "lucide-react"
+import { Plus, Edit, Lock, Unlock } from "lucide-react"
 import { Modal } from "@/components/ui/modal"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertModal } from "@/components/ui/alert-modal"
+import { SearchProvider } from "@/components/search/search-context"
+import { SearchInput } from "@/components/search/search-input"
+import { useSearch } from "@/components/search/search-context"
+import { Input } from "@/components/ui/input"
 
-export default function UsersPage() {
+function UsersContent() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isBlockModalOpen, setIsBlockModalOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<any>(null)
+  const { searchTerm } = useSearch()
 
   const users = [
     {
@@ -61,6 +65,19 @@ export default function UsersPage() {
     },
   ]
 
+  // Filter users based on search term
+  const filteredUsers = users.filter((user) => {
+    if (!searchTerm) return true
+
+    const search = searchTerm.toLowerCase()
+    return (
+      user.name.toLowerCase().includes(search) ||
+      user.email.toLowerCase().includes(search) ||
+      user.role.toLowerCase().includes(search) ||
+      user.status.toLowerCase().includes(search)
+    )
+  })
+
   const handleEdit = (user: any) => {
     setSelectedUser(user)
     setIsEditModalOpen(true)
@@ -85,10 +102,7 @@ export default function UsersPage() {
         </Button>
       </div>
       <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input type="search" placeholder="Поиск пользователей..." className="pl-8 w-full" />
-        </div>
+        <SearchInput placeholder="Поиск пользователей..." className="flex-1 max-w-sm" />
       </div>
       <Card>
         <CardHeader>
@@ -108,35 +122,43 @@ export default function UsersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell className="font-medium">{user.name}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>{user.role}</TableCell>
-                  <TableCell>
-                    {user.status === "active" ? (
-                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                        Активен
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                        Заблокирован
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>{user.lastLogin}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleBlock(user)}>
-                        {user.status === "active" ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-                      </Button>
-                    </div>
+              {filteredUsers.length > 0 ? (
+                filteredUsers.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell className="font-medium">{user.name}</TableCell>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell>{user.role}</TableCell>
+                    <TableCell>
+                      {user.status === "active" ? (
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                          Активен
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                          Заблокирован
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>{user.lastLogin}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleBlock(user)}>
+                          {user.status === "active" ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
+                    {searchTerm ? "Пользователи не найдены" : "Нет доступных пользователей"}
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -246,5 +268,13 @@ export default function UsersPage() {
         confirmText={selectedUser?.status === "active" ? "Заблокировать" : "Разблокировать"}
       />
     </div>
+  )
+}
+
+export default function UsersPage() {
+  return (
+    <SearchProvider>
+      <UsersContent />
+    </SearchProvider>
   )
 }

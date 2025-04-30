@@ -2,8 +2,9 @@
 
 import type React from "react"
 
-import { SessionProvider } from "next-auth/react"
+import SessionProvider from "./session-provider"
 import { ThemeProvider } from "@/components/theme-provider"
+import { SearchProvider } from "@/components/search/search-context"
 
 export default function ClientProviders({
   children,
@@ -21,7 +22,7 @@ export default function ClientProviders({
         disableTransitionOnChange
         storageKey="monitoring-theme"
       >
-        {children}
+        <SearchProvider>{children}</SearchProvider>
       </ThemeProvider>
     </SessionProvider>
   )

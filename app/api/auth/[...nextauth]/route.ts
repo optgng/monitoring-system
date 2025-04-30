@@ -1,6 +1,6 @@
 import NextAuth from "next-auth"
 import KeycloakProvider from "next-auth/providers/keycloak"
-import { jwtDecode } from "jose"
+import { decodeJwt } from "jose"
 import type { NextAuthOptions } from "next-auth"
 import type { JWT } from "next-auth/jwt"
 import { logger } from "@/lib/logger"
@@ -55,7 +55,7 @@ export const authOptions: NextAuthOptions = {
       if (account && account.access_token) {
         try {
           // Decode the access token to get user roles
-          const decoded = jwtDecode<KeycloakToken>(account.access_token)
+          const decoded = decodeJwt(account.access_token) as KeycloakToken
 
           // Extract roles from the token
           const realmRoles = decoded.realm_access?.roles || []
@@ -65,7 +65,8 @@ export const authOptions: NextAuthOptions = {
           token.roles = [...realmRoles, ...resourceRoles]
           token.accessToken = account.access_token
           token.refreshToken = account.refresh_token
-          token.accessTokenExpires = account.expires_at * 1000
+          token.accessTokenExpires = account.expires_at ? account.expires_at * 1000 : 0
+          token.tokenType = account.token_type
         } catch (error) {
           logger.error("Error decoding JWT token", error)
           // Continue with the token we have
@@ -73,7 +74,7 @@ export const authOptions: NextAuthOptions = {
       }
 
       // Return previous token if the access token has not expired yet
-      if (Date.now() < (token.accessTokenExpires as number)) {
+      if (token.accessTokenExpires && Date.now() < (token.accessTokenExpires as number)) {
         return token
       }
 
@@ -83,9 +84,10 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       // Add user roles and ID to the session
       if (token) {
-        session.user.roles = token.roles as string[]
-        session.user.id = token.sub
+        session.user.roles = (token.roles as string[]) || []
+        session.user.id = token.sub || ""
         session.accessToken = token.accessToken as string
+        session.error = token.error as string | undefined
       }
       return session
     },
@@ -117,6 +119,10 @@ export const authOptions: NextAuthOptions = {
 // Function to refresh the access token
 async function refreshAccessToken(token: JWT) {
   try {
+    if (!token.refreshToken) {
+      throw new Error("No refresh token available")
+    }
+
     const url = `${process.env.KEYCLOAK_ISSUER}/protocol/openid-connect/token`
 
     const response = await fetch(url, {
@@ -133,7 +139,22 @@ async function refreshAccessToken(token: JWT) {
     const refreshedTokens = await response.json()
 
     if (!response.ok) {
+      logger.error("Error refreshing access token", refreshedTokens)
       throw refreshedTokens
+    }
+
+    logger.debug("Token refreshed successfully", { expires_in: refreshedTokens.expires_in })
+
+    // Decode the new access token to get updated roles
+    let roles = (token.roles as string[]) || []
+    try {
+      const decoded = decodeJwt(refreshedTokens.access_token) as KeycloakToken
+      const realmRoles = decoded.realm_access?.roles || []
+      const resourceRoles = Object.values(decoded.resource_access || {}).flatMap((resource) => resource.roles || [])
+      roles = [...realmRoles, ...resourceRoles]
+    } catch (error) {
+      logger.error("Error decoding refreshed token", error)
+      // Keep the existing roles if decoding fails
     }
 
     return {
@@ -141,6 +162,7 @@ async function refreshAccessToken(token: JWT) {
       accessToken: refreshedTokens.access_token,
       refreshToken: refreshedTokens.refresh_token ?? token.refreshToken,
       accessTokenExpires: Date.now() + refreshedTokens.expires_in * 1000,
+      roles: roles,
     }
   } catch (error) {
     logger.error("Error refreshing access token", error)

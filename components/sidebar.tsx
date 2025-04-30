@@ -8,27 +8,14 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Bell, Home, LayoutDashboard, Shield, Users, Cpu, AlertTriangle, FileText, FileSearch } from "lucide-react"
 import { useSession } from "next-auth/react"
+import { RoleBasedUI } from "@/components/role-based-ui"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 export default function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname()
-  const { data: session } = useSession()
-
-  // Get user roles from session
-  const userRoles = session?.user?.roles || []
-
-  // Check if user has a specific role
-  const hasRole = (role: string) => userRoles.includes(role)
-
-  // Check if user is admin
-  const isAdmin = hasRole("admin")
-
-  // Check if user is manager
-  const isManager = hasRole("manager")
-
-  // Check if user is support
-  const isSupport = hasRole("support")
+  const { data: session, status } = useSession()
 
   return (
     <div className={cn("pb-12 w-64 border-r bg-gray-100/40 dark:bg-gray-800/40", className)}>
@@ -63,7 +50,10 @@ export default function Sidebar({ className }: SidebarProps) {
             </Button>
 
             {/* Отчеты - только для руководителей и администраторов */}
-            {(isManager || isAdmin) && (
+            <RoleBasedUI
+              requiredRoles={["manager", "admin"]}
+              loadingComponent={<Skeleton className="h-9 w-full rounded-md" />}
+            >
               <Button
                 variant={pathname === "/reports" ? "secondary" : "ghost"}
                 size="sm"
@@ -75,10 +65,18 @@ export default function Sidebar({ className }: SidebarProps) {
                   Отчеты
                 </Link>
               </Button>
-            )}
+            </RoleBasedUI>
 
             {/* Разделы, доступные только администраторам */}
-            {isAdmin && (
+            <RoleBasedUI
+              requiredRoles={["admin"]}
+              loadingComponent={
+                <div className="space-y-2">
+                  <Skeleton className="h-9 w-full rounded-md" />
+                  <Skeleton className="h-9 w-full rounded-md" />
+                </div>
+              }
+            >
               <>
                 <Button
                   variant={pathname === "/devices" ? "secondary" : "ghost"}
@@ -103,10 +101,13 @@ export default function Sidebar({ className }: SidebarProps) {
                   </Link>
                 </Button>
               </>
-            )}
+            </RoleBasedUI>
 
             {/* Логи - доступны для специалистов технической поддержки и администраторов */}
-            {(isSupport || isAdmin) && (
+            <RoleBasedUI
+              requiredRoles={["support", "admin"]}
+              loadingComponent={<Skeleton className="h-9 w-full rounded-md" />}
+            >
               <Button
                 variant={pathname === "/logs" ? "secondary" : "ghost"}
                 size="sm"
@@ -118,12 +119,23 @@ export default function Sidebar({ className }: SidebarProps) {
                   Логи
                 </Link>
               </Button>
-            )}
+            </RoleBasedUI>
           </div>
         </div>
 
         {/* Раздел администрирования - только для администраторов */}
-        {isAdmin && (
+        <RoleBasedUI
+          requiredRoles={["admin"]}
+          loadingComponent={
+            <div className="px-4 py-2">
+              <Skeleton className="h-6 w-40 mb-2" />
+              <div className="space-y-2">
+                <Skeleton className="h-9 w-full rounded-md" />
+                <Skeleton className="h-9 w-full rounded-md" />
+              </div>
+            </div>
+          }
+        >
           <div className="px-4 py-2">
             <h2 className="mb-2 px-2 text-lg font-semibold tracking-tight">Администрирование</h2>
             <div className="space-y-1">
@@ -151,7 +163,7 @@ export default function Sidebar({ className }: SidebarProps) {
               </Button>
             </div>
           </div>
-        )}
+        </RoleBasedUI>
       </div>
     </div>
   )

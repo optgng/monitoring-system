@@ -1,9 +1,8 @@
 "use client"
 
-import { useState } from "react"
-import { Bell, Search, LogOut, User } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Bell, LogOut, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,17 +15,36 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { ThemeToggle } from "./theme-toggle"
-import { signOut, useSession } from "next-auth/react"
+import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import { signOutWithErrorHandling } from "@/lib/auth-utils"
+import { logger } from "@/lib/logger"
 
 export default function Header() {
   const [notifications, setNotifications] = useState(3)
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const router = useRouter()
+  const [isSigningOut, setIsSigningOut] = useState(false)
+
+  // Check for session errors
+  useEffect(() => {
+    if (session?.error) {
+      logger.error("Session error detected in header", { error: session.error })
+    }
+  }, [session])
 
   const handleSignOut = async () => {
-    await signOut({ redirect: false })
-    router.push("/login")
+    try {
+      setIsSigningOut(true)
+      await signOutWithErrorHandling({ redirect: false })
+      router.push("/login")
+    } catch (error) {
+      logger.error("Error during sign out", error)
+      // Fallback redirect
+      router.push("/login")
+    } finally {
+      setIsSigningOut(false)
+    }
   }
 
   // Get user initials for avatar fallback
@@ -43,12 +61,6 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
       <div className="flex flex-1 items-center gap-4 md:gap-6">
-        <form className="hidden flex-1 sm:flex sm:max-w-sm">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input type="search" placeholder="Поиск..." className="pl-8 sm:w-[300px] md:w-[200px] lg:w-[300px]" />
-          </div>
-        </form>
         <div className="ml-auto flex items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -104,9 +116,9 @@ export default function Header() {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut} className="text-red-500">
+              <DropdownMenuItem onClick={handleSignOut} className="text-red-500" disabled={isSigningOut}>
                 <LogOut className="mr-2 h-4 w-4" />
-                Выйти
+                {isSigningOut ? "Выход..." : "Выйти"}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

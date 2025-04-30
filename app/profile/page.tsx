@@ -115,20 +115,6 @@ export default function ProfilePage() {
                 </div>
                 <Button variant="outline">Включено</Button>
               </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">Telegram-уведомления</p>
-                  <p className="text-sm text-muted-foreground">Получать уведомления в Telegram</p>
-                </div>
-                <Button variant="outline">Настроить</Button>
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">SMS-уведомления</p>
-                  <p className="text-sm text-muted-foreground">Получать уведомления по SMS</p>
-                </div>
-                <Button variant="outline">Отключено</Button>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>

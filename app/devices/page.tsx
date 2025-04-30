@@ -1,22 +1,28 @@
 "use client"
 
+import { Input } from "@/components/ui/input"
+
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Edit, Trash2, ExternalLink } from "lucide-react"
+import { Plus, Edit, Trash2, ExternalLink } from "lucide-react"
 import { Modal } from "@/components/ui/modal"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertModal } from "@/components/ui/alert-modal"
+import { SearchProvider } from "@/components/search/search-context"
+import { SearchInput } from "@/components/search/search-input"
+import { useSearch } from "@/components/search/search-context"
 
-export default function DevicesPage() {
+// Separate the main content to use the search context
+function DevicesContent() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [selectedDevice, setSelectedDevice] = useState<any>(null)
+  const { searchTerm } = useSearch()
 
   const devices = [
     {
@@ -61,6 +67,19 @@ export default function DevicesPage() {
     },
   ]
 
+  // Filter devices based on search term
+  const filteredDevices = devices.filter((device) => {
+    if (!searchTerm) return true
+
+    const search = searchTerm.toLowerCase()
+    return (
+      device.name.toLowerCase().includes(search) ||
+      device.ip.toLowerCase().includes(search) ||
+      device.type.toLowerCase().includes(search) ||
+      device.status.toLowerCase().includes(search)
+    )
+  })
+
   const handleEdit = (device: any) => {
     setSelectedDevice(device)
     setIsEditModalOpen(true)
@@ -85,10 +104,7 @@ export default function DevicesPage() {
         </Button>
       </div>
       <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input type="search" placeholder="Поиск устройств..." className="pl-8 w-full" />
-        </div>
+        <SearchInput placeholder="Поиск устройств..." className="flex-1 max-w-sm" />
       </div>
       <Card>
         <CardHeader>
@@ -108,42 +124,50 @@ export default function DevicesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {devices.map((device) => (
-                <TableRow key={device.id}>
-                  <TableCell className="font-medium">{device.name}</TableCell>
-                  <TableCell>{device.ip}</TableCell>
-                  <TableCell>{device.type}</TableCell>
-                  <TableCell>
-                    {device.status === "online" ? (
-                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                        В сети
-                      </Badge>
-                    ) : device.status === "warning" ? (
-                      <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                        Предупреждение
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                        Не в сети
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>{device.lastCheck}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="icon">
-                        <ExternalLink className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(device)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(device)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+              {filteredDevices.length > 0 ? (
+                filteredDevices.map((device) => (
+                  <TableRow key={device.id}>
+                    <TableCell className="font-medium">{device.name}</TableCell>
+                    <TableCell>{device.ip}</TableCell>
+                    <TableCell>{device.type}</TableCell>
+                    <TableCell>
+                      {device.status === "online" ? (
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                          В сети
+                        </Badge>
+                      ) : device.status === "warning" ? (
+                        <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                          Предупреждение
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                          Не в сети
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>{device.lastCheck}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost" size="icon">
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(device)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(device)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
+                    {searchTerm ? "Устройства не найдены" : "Нет доступных устройств"}
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -252,5 +276,14 @@ export default function DevicesPage() {
         description={`Вы уверены, что хотите удалить устройство "${selectedDevice?.name}"? Это действие нельзя будет отменить.`}
       />
     </div>
+  )
+}
+
+// Wrap the content with the SearchProvider
+export default function DevicesPage() {
+  return (
+    <SearchProvider>
+      <DevicesContent />
+    </SearchProvider>
   )
 }
