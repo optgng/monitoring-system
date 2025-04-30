@@ -45,8 +45,9 @@ services:
       KC_HOSTNAME_STRICT: "false"
       KC_HOSTNAME_STRICT_HTTPS: "false"
       KC_HTTP_ENABLED: "true"
-      # Uncomment for production with proper domain
-      # KC_HOSTNAME: keycloak.yourdomain.com
+      # For Docker networking
+      KC_HOSTNAME_URL: http://keycloak:8080
+      KC_HOSTNAME_ADMIN_URL: http://keycloak:8080
       
       # Proxy settings if behind a load balancer/reverse proxy
       # KC_PROXY: edge
@@ -83,13 +84,17 @@ services:
       NEXTAUTH_URL: http://localhost:3000
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
       
-      # Keycloak connection
+      # Keycloak connection - use internal Docker network hostname
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
       KEYCLOAK_ISSUER: http://keycloak:8080/realms/monitoring
       
-      # Set to internal Keycloak URL for server-to-server communication
-      # For production with external URL, use https://keycloak.yourdomain.com/realms/monitoring 
+      # Add connection timeout settings
+      CONNECTION_TIMEOUT: 10000
+      
+      # Add retry settings
+      MAX_RETRIES: 3
+      RETRY_DELAY: 1000
     depends_on:
       keycloak:
         condition: service_healthy
