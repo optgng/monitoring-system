@@ -1,28 +1,24 @@
 "use client"
 
-import { Input } from "@/components/ui/input"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Edit, Trash2, ExternalLink } from "lucide-react"
+import { Plus, Search, Edit, Trash2, ExternalLink } from "lucide-react"
 import { Modal } from "@/components/ui/modal"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertModal } from "@/components/ui/alert-modal"
-import { SearchProvider } from "@/components/search/search-context"
-import { SearchInput } from "@/components/search/search-input"
-import { useSearch } from "@/components/search/search-context"
 
-// Separate the main content to use the search context
-function DevicesContent() {
+export default function DevicesPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [selectedDevice, setSelectedDevice] = useState<any>(null)
-  const { searchTerm } = useSearch()
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filteredDevices, setFilteredDevices] = useState<any[]>([])
 
   const devices = [
     {
@@ -68,17 +64,27 @@ function DevicesContent() {
   ]
 
   // Filter devices based on search term
-  const filteredDevices = devices.filter((device) => {
-    if (!searchTerm) return true
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredDevices(devices)
+      return
+    }
 
-    const search = searchTerm.toLowerCase()
-    return (
-      device.name.toLowerCase().includes(search) ||
-      device.ip.toLowerCase().includes(search) ||
-      device.type.toLowerCase().includes(search) ||
-      device.status.toLowerCase().includes(search)
+    const lowercasedSearch = searchTerm.toLowerCase()
+    const filtered = devices.filter(
+      (device) =>
+        device.name.toLowerCase().includes(lowercasedSearch) ||
+        device.ip.toLowerCase().includes(lowercasedSearch) ||
+        device.type.toLowerCase().includes(lowercasedSearch),
     )
-  })
+
+    setFilteredDevices(filtered)
+  }, [searchTerm])
+
+  // Initialize filtered devices with all devices
+  useEffect(() => {
+    setFilteredDevices(devices)
+  }, [])
 
   const handleEdit = (device: any) => {
     setSelectedDevice(device)
@@ -104,7 +110,16 @@ function DevicesContent() {
         </Button>
       </div>
       <div className="flex items-center gap-2">
-        <SearchInput placeholder="Поиск устройств..." className="flex-1 max-w-sm" />
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Поиск устройств по имени, IP или типу..."
+            className="pl-8 w-full"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
       </div>
       <Card>
         <CardHeader>
@@ -163,8 +178,8 @@ function DevicesContent() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
-                    {searchTerm ? "Устройства не найдены" : "Нет доступных устройств"}
+                  <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                    Устройства не найдены
                   </TableCell>
                 </TableRow>
               )}
@@ -276,14 +291,5 @@ function DevicesContent() {
         description={`Вы уверены, что хотите удалить устройство "${selectedDevice?.name}"? Это действие нельзя будет отменить.`}
       />
     </div>
-  )
-}
-
-// Wrap the content with the SearchProvider
-export default function DevicesPage() {
-  return (
-    <SearchProvider>
-      <DevicesContent />
-    </SearchProvider>
   )
 }

@@ -3,16 +3,16 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Edit, Trash2, Mail, MessageSquare } from "lucide-react"
+import { Plus, Edit, Trash2, Mail, MessageSquare } from "lucide-react"
 import { Modal } from "@/components/ui/modal"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { AlertModal } from "@/components/ui/alert-modal"
+import { Input } from "@/components/ui/input"
 
 export default function NotificationsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -86,12 +86,9 @@ export default function NotificationsPage() {
           <Plus className="mr-2 h-4 w-4" /> Создать правило
         </Button>
       </div>
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input type="search" placeholder="Поиск правил..." className="pl-8 w-full" />
-        </div>
-      </div>
+
+      {/* Search bar removed */}
+
       <Card>
         <CardHeader>
           <CardTitle>Правила уведомлений</CardTitle>

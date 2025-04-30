@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Switch } from "@/components/ui/switch"
+import { MessageSquare } from "lucide-react"
 
 export default function ProfilePage() {
   return (
@@ -79,27 +81,7 @@ export default function ProfilePage() {
               <Button>Изменить пароль</Button>
             </CardFooter>
           </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Двухфакторная аутентификация</CardTitle>
-              <CardDescription>
-                Повысьте безопасность вашего аккаунта с помощью двухфакторной аутентификации
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">
-                    Статус: <span className="text-red-500">Отключено</span>
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Защитите ваш аккаунт с помощью приложения аутентификации
-                  </p>
-                </div>
-                <Button variant="outline">Включить</Button>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Two-factor authentication section removed */}
         </TabsContent>
         <TabsContent value="notifications" className="space-y-4">
           <Card>
@@ -107,15 +89,68 @@ export default function ProfilePage() {
               <CardTitle>Настройки уведомлений</CardTitle>
               <CardDescription>Настройте способы получения уведомлений</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
+              {/* Email notifications */}
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium">Email-уведомления</p>
                   <p className="text-sm text-muted-foreground">Получать уведомления на email</p>
                 </div>
-                <Button variant="outline">Включено</Button>
+                <Switch defaultChecked />
+              </div>
+
+              {/* Telegram notifications */}
+              <div className="border-t pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-5 w-5 text-blue-500" />
+                    <div>
+                      <p className="font-medium">Telegram-уведомления</p>
+                      <p className="text-sm text-muted-foreground">Получать уведомления в Telegram</p>
+                    </div>
+                  </div>
+                  <Switch />
+                </div>
+
+                <div className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="telegram-username">Имя пользователя Telegram</Label>
+                    <Input id="telegram-username" placeholder="@username" />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Типы уведомлений</Label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <div className="flex items-center space-x-2">
+                        <Switch id="telegram-critical" />
+                        <Label htmlFor="telegram-critical">Критические оповещения</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Switch id="telegram-warnings" />
+                        <Label htmlFor="telegram-warnings">Предупреждения</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Switch id="telegram-system" />
+                        <Label htmlFor="telegram-system">Системные уведомления</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Switch id="telegram-reports" />
+                        <Label htmlFor="telegram-reports">Отчеты</Label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <Button variant="outline" className="w-full">
+                      Подключить Telegram
+                    </Button>
+                  </div>
+                </div>
               </div>
             </CardContent>
+            <CardFooter>
+              <Button>Сохранить настройки</Button>
+            </CardFooter>
           </Card>
         </TabsContent>
       </Tabs>

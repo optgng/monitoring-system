@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Search, RefreshCw, FileWarning, Clock } from "lucide-react"
+import { Search, RefreshCw, Clock, AlertTriangle, AlertCircle, Info } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -18,6 +18,10 @@ import { cn } from "@/lib/utils"
 export default function LogsPage() {
   const [date, setDate] = useState<Date | undefined>(new Date())
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filteredLogs, setFilteredLogs] = useState<any[]>([])
+  const [selectedTab, setSelectedTab] = useState("all")
+  const [severityFilter, setSeverityFilter] = useState("all")
 
   // Имитация данных логов
   const logs = [
@@ -79,6 +83,49 @@ export default function LogsPage() {
     },
   ]
 
+  // Filter logs based on search term, tab, and severity filter
+  useEffect(() => {
+    let filtered = [...logs]
+
+    // Filter by tab (log level)
+    if (selectedTab !== "all") {
+      filtered = filtered.filter((log) => {
+        if (selectedTab === "errors") return log.level === "ERROR"
+        if (selectedTab === "warnings") return log.level === "WARN"
+        if (selectedTab === "info") return log.level === "INFO"
+        return true
+      })
+    }
+
+    // Filter by severity if not "all"
+    if (severityFilter !== "all") {
+      filtered = filtered.filter((log) => {
+        if (severityFilter === "error") return log.level === "ERROR"
+        if (severityFilter === "warn") return log.level === "WARN" || log.level === "ERROR"
+        if (severityFilter === "info") return true // All levels
+        return true
+      })
+    }
+
+    // Filter by search term
+    if (searchTerm.trim()) {
+      const lowercasedSearch = searchTerm.toLowerCase()
+      filtered = filtered.filter(
+        (log) =>
+          log.message.toLowerCase().includes(lowercasedSearch) ||
+          log.service.toLowerCase().includes(lowercasedSearch) ||
+          log.details.toLowerCase().includes(lowercasedSearch),
+      )
+    }
+
+    setFilteredLogs(filtered)
+  }, [searchTerm, selectedTab, severityFilter])
+
+  // Initialize filtered logs with all logs
+  useEffect(() => {
+    setFilteredLogs(logs)
+  }, [])
+
   const refreshLogs = () => {
     setIsRefreshing(true)
     // Имитация обновления данных
@@ -109,6 +156,19 @@ export default function LogsPage() {
     }
   }
 
+  const getAlertIcon = (level: string) => {
+    switch (level) {
+      case "ERROR":
+        return <AlertTriangle className="h-5 w-5 text-red-500" />
+      case "WARN":
+        return <AlertCircle className="h-5 w-5 text-yellow-500" />
+      case "INFO":
+        return <Info className="h-5 w-5 text-blue-500" />
+      default:
+        return null
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -122,10 +182,16 @@ export default function LogsPage() {
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input type="search" placeholder="Поиск в логах..." className="pl-8 w-full" />
+          <Input
+            type="search"
+            placeholder="Поиск в логах..."
+            className="pl-8 w-full"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
 
-        <Select defaultValue="all">
+        <Select defaultValue="all" value={severityFilter} onValueChange={setSeverityFilter}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Уровень логирования" />
           </SelectTrigger>
@@ -164,7 +230,7 @@ export default function LogsPage() {
         </Popover>
       </div>
 
-      <Tabs defaultValue="all" className="space-y-4">
+      <Tabs defaultValue="all" className="space-y-4" value={selectedTab} onValueChange={setSelectedTab}>
         <TabsList>
           <TabsTrigger value="all">Все логи</TabsTrigger>
           <TabsTrigger value="errors">Ошибки</TabsTrigger>
@@ -172,11 +238,27 @@ export default function LogsPage() {
           <TabsTrigger value="info">Информационные</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="all" className="space-y-4">
+        <TabsContent value={selectedTab} className="space-y-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle>Все логи системы</CardTitle>
-              <CardDescription>Показаны все уровни логирования за выбранный период</CardDescription>
+              <CardTitle>
+                {selectedTab === "all"
+                  ? "Все логи системы"
+                  : selectedTab === "errors"
+                    ? "Ошибки"
+                    : selectedTab === "warnings"
+                      ? "Предупреждения"
+                      : "Информационные сообщения"}
+              </CardTitle>
+              <CardDescription>
+                {selectedTab === "all"
+                  ? "Показаны все уровни логирования за выбранный период"
+                  : selectedTab === "errors"
+                    ? "Показаны только ошибки за выбранный период"
+                    : selectedTab === "warnings"
+                      ? "Показаны только предупреждения за выбранный период"
+                      : "Показаны только информационные сообщения за выбранный период"}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
@@ -186,80 +268,40 @@ export default function LogsPage() {
                     <TableHead>Уровень</TableHead>
                     <TableHead>Сервис</TableHead>
                     <TableHead>Сообщение</TableHead>
-                    <TableHead className="text-right">Действия</TableHead>
+                    <TableHead>Детали</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {logs.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell className="font-mono text-xs">{formatTimestamp(log.timestamp)}</TableCell>
-                      <TableCell>{getLevelBadge(log.level)}</TableCell>
-                      <TableCell>{log.service}</TableCell>
-                      <TableCell className="max-w-md truncate" title={log.message}>
-                        {log.message}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <FileWarning className="h-4 w-4" />
-                          <span className="sr-only">Создать инцидент</span>
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="errors" className="space-y-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle>Ошибки</CardTitle>
-              <CardDescription>Показаны только ошибки за выбранный период</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Время</TableHead>
-                    <TableHead>Уровень</TableHead>
-                    <TableHead>Сервис</TableHead>
-                    <TableHead>Сообщение</TableHead>
-                    <TableHead className="text-right">Действия</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {logs
-                    .filter((log) => log.level === "ERROR")
-                    .map((log) => (
+                  {filteredLogs.length > 0 ? (
+                    filteredLogs.map((log) => (
                       <TableRow key={log.id}>
                         <TableCell className="font-mono text-xs">{formatTimestamp(log.timestamp)}</TableCell>
-                        <TableCell>{getLevelBadge(log.level)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {getAlertIcon(log.level)}
+                            {getLevelBadge(log.level)}
+                          </div>
+                        </TableCell>
                         <TableCell>{log.service}</TableCell>
                         <TableCell className="max-w-md truncate" title={log.message}>
                           {log.message}
                         </TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                            <FileWarning className="h-4 w-4" />
-                            <span className="sr-only">Создать инцидент</span>
-                          </Button>
+                        <TableCell className="max-w-md truncate" title={log.details}>
+                          {log.details}
                         </TableCell>
                       </TableRow>
-                    ))}
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                        {searchTerm ? "Логи не найдены" : "Нет доступных логов"}
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="warnings" className="space-y-4">
-          {/* Аналогично для предупреждений */}
-        </TabsContent>
-
-        <TabsContent value="info" className="space-y-4">
-          {/* Аналогично для информационных сообщений */}
         </TabsContent>
       </Tabs>
     </div>

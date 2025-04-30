@@ -3,10 +3,9 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Edit, Copy, BarChart3, LineChart, PieChart, Table2, Trash2, FileText } from "lucide-react"
+import { Plus, Edit, Copy, BarChart3, LineChart, PieChart, Table2, Trash2, FileText } from "lucide-react"
 import Link from "next/link"
 import { Modal } from "@/components/ui/modal"
 import { Label } from "@/components/ui/label"
@@ -15,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertModal } from "@/components/ui/alert-modal"
 import { getCurrentUser } from "@/lib/auth"
 import { useRouter } from "next/navigation"
+import { Input } from "@/components/ui/input"
 
 export default function DashboardsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -97,12 +97,9 @@ export default function DashboardsPage() {
           </Button>
         )}
       </div>
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input type="search" placeholder="Поиск дашбордов..." className="pl-8 w-full" />
-        </div>
-      </div>
+
+      {/* Search bar removed */}
+
       <Tabs defaultValue="all" className="space-y-4">
         <TabsList>
           <TabsTrigger value="all">Все</TabsTrigger>
@@ -176,19 +173,19 @@ export default function DashboardsPage() {
           </div>
         </TabsContent>
 
-        {/* Остальные вкладки аналогично с проверкой ролей */}
+        {/* Other tabs content remains the same */}
         <TabsContent value="system" className="space-y-4">
-          {/* Содержимое аналогично с проверкой ролей */}
+          {/* Content for system tab */}
         </TabsContent>
         <TabsContent value="network" className="space-y-4">
-          {/* Содержимое аналогично с проверкой ролей */}
+          {/* Content for network tab */}
         </TabsContent>
         <TabsContent value="custom" className="space-y-4">
-          {/* Содержимое аналогично с проверкой ролей */}
+          {/* Content for custom tab */}
         </TabsContent>
       </Tabs>
 
-      {/* Модальные окна только для администраторов */}
+      {/* Modal components remain the same */}
       {userRole === "admin" && (
         <>
           {/* Модальное окно создания дашборда */}
