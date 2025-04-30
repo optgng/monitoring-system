@@ -1,0 +1,116 @@
+{
+  "realm": "monitoring",
+  "enabled": true,
+  "displayName": "Система Мониторинга",
+  "displayNameHtml": "<div class=\"kc-logo-text\"><span>Система Мониторинга</span></div>",
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "Администратор системы"
+      },
+      {
+        "name": "manager",
+        "description": "Руководитель"
+      },
+      {
+        "name": "support",
+        "description": "Специалист технической поддержки"
+      },
+      {
+        "name": "user",
+        "description": "Обычный пользователь"
+      }
+    ]
+  },
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "email": "admin@example.com",
+      "firstName": "Админ",
+      "lastName": "Системы",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["admin"]
+    },
+    {
+      "username": "manager",
+      "enabled": true,
+      "email": "manager@example.com",
+      "firstName": "Иван",
+      "lastName": "Руководитель",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "manager123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["manager"]
+    },
+    {
+      "username": "support",
+      "enabled": true,
+      "email": "support@example.com",
+      "firstName": "Алексей",
+      "lastName": "Техподдержка",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "support123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["support"]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "monitoring-system",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "xxxxxxxxxxx",
+      "redirectUris": ["http://localhost:3000/*"],
+      "webOrigins": ["http://localhost:3000"],
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "id.token.as.detached.signature": "false",
+        "saml.assertion.signature": "false",
+        "saml.force.post.binding": "false",
+        "saml.multivalued.roles": "false",
+        "saml.encrypt": "false",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.revoke.offline.tokens": "false",
+        "saml.server.signature": "false",
+        "saml.server.signature.keyinfo.ext": "false",
+        "use.refresh.tokens": "true",
+        "exclude.session.state.from.auth.response": "false",
+        "oidc.ciba.grant.enabled": "false",
+        "backchannel.logout.session.required": "true",
+        "client_credentials.use_refresh_token": "false",
+        "saml_force_name_id_format": "false",
+        "require.pushed.authorization.requests": "false",
+        "saml.client.signature": "false",
+        "pkce.code.challenge.method": "S256",
+        "tls.client.certificate.bound.access.tokens": "false",
+        "saml.authnstatement": "false",
+        "display.on.consent.screen": "false",
+        "saml.onetimeuse.condition": "false"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "defaultClientScopes": ["web-origins", "roles", "profile", "email"],
+      "optionalClientScopes": ["address", "phone", "offline_access", "microprofile-jwt"]
+    }
+  ]
+}
