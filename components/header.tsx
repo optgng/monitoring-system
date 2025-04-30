@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Bell, Search } from "lucide-react"
+import { Bell, Search, LogOut, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -16,10 +16,29 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { ThemeToggle } from "./theme-toggle"
-import { RoleSwitcher } from "./role-switcher"
+import { signOut, useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 
 export default function Header() {
   const [notifications, setNotifications] = useState(3)
+  const { data: session } = useSession()
+  const router = useRouter()
+
+  const handleSignOut = async () => {
+    await signOut({ redirect: false })
+    router.push("/login")
+  }
+
+  // Get user initials for avatar fallback
+  const getInitials = () => {
+    if (!session?.user?.name) return "U"
+    return session.user.name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .substring(0, 2)
+  }
 
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
@@ -31,7 +50,6 @@ export default function Header() {
           </div>
         </form>
         <div className="ml-auto flex items-center gap-2">
-          <RoleSwitcher />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" className="relative">
@@ -68,19 +86,28 @@ export default function Header() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
                 <Avatar>
-                  <AvatarImage src="/placeholder.svg" alt="Аватар" />
-                  <AvatarFallback>АД</AvatarFallback>
+                  <AvatarImage src={session?.user?.image || ""} alt="Аватар" />
+                  <AvatarFallback>{getInitials()}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Мой аккаунт</DropdownMenuLabel>
+              <DropdownMenuLabel>
+                {session?.user?.name || "Пользователь"}
+                {session?.user?.email && <p className="text-xs text-muted-foreground">{session.user.email}</p>}
+              </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Link href="/profile">Профиль</Link>
+                <Link href="/profile">
+                  <User className="mr-2 h-4 w-4" />
+                  Профиль
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-red-500">Выйти</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleSignOut} className="text-red-500">
+                <LogOut className="mr-2 h-4 w-4" />
+                Выйти
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
