@@ -1,0 +1,296 @@
+import { logger } from "./logger"
+
+// Define types for Keycloak API responses and requests
+export interface KeycloakUser {
+  id: string
+  username: string
+  firstName?: string
+  lastName?: string
+  email?: string
+  enabled: boolean
+  emailVerified: boolean
+  attributes?: Record<string, string[]>
+  requiredActions?: string[]
+  access?: {
+    manageGroupMembership: boolean
+    view: boolean
+    mapRoles: boolean
+    impersonate: boolean
+    manage: boolean
+  }
+  createdTimestamp?: number
+}
+
+export interface KeycloakUserCreate {
+  username: string
+  email: string
+  firstName?: string
+  lastName?: string
+  enabled?: boolean
+  emailVerified?: boolean
+  attributes?: Record<string, string[]>
+  requiredActions?: string[]
+  credentials?: {
+    type: string
+    value: string
+    temporary: boolean
+  }[]
+}
+
+export interface KeycloakUserUpdate {
+  firstName?: string
+  lastName?: string
+  email?: string
+  attributes?: Record<string, string[]>
+  requiredActions?: string[]
+  enabled?: boolean
+  emailVerified?: boolean
+}
+
+export interface KeycloakError {
+  error: string
+  error_description: string
+}
+
+export class KeycloakService {
+  private readonly keycloakHost: string
+  private readonly realm: string
+  private readonly clientId: string
+  private readonly clientSecret: string
+  private adminToken: string | null = null
+  private adminTokenExpiry = 0
+
+  constructor() {
+    this.keycloakHost = process.env.KEYCLOAK_HOST || ""
+    // Extract realm from the issuer URL
+    const issuerUrl = process.env.KEYCLOAK_ISSUER || ""
+    this.realm = issuerUrl.split("/realms/")[1] || "monitoring"
+    this.clientId = process.env.KEYCLOAK_CLIENT_ID || ""
+    this.clientSecret = process.env.KEYCLOAK_CLIENT_SECRET || ""
+  }
+
+  /**
+   * Get an admin token for Keycloak API operations
+   */
+  private async getAdminToken(): Promise<string> {
+    // Check if we have a valid token
+    if (this.adminToken && Date.now() < this.adminTokenExpiry) {
+      return this.adminToken
+    }
+
+    try {
+      const response = await fetch(`${this.keycloakHost}/realms/master/protocol/openid-connect/token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          grant_type: "client_credentials",
+          client_id: this.clientId,
+          client_secret: this.clientSecret,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        logger.error("Failed to get admin token", error)
+        throw new Error(`Failed to get admin token: ${error.error_description || error.error || "Unknown error"}`)
+      }
+
+      const data = await response.json()
+      this.adminToken = data.access_token
+      // Set expiry to slightly before the actual expiry to avoid edge cases
+      this.adminTokenExpiry = Date.now() + (data.expires_in - 60) * 1000
+      return this.adminToken
+    } catch (error) {
+      logger.error("Error getting admin token", error)
+      throw new Error(`Failed to get admin token: ${(error as Error).message}`)
+    }
+  }
+
+  /**
+   * Make an authenticated request to the Keycloak API
+   */
+  private async makeRequest<T>(endpoint: string, method = "GET", body?: any, userToken?: string): Promise<T> {
+    try {
+      // Determine which token to use
+      const token = userToken || (await this.getAdminToken())
+
+      const headers: HeadersInit = {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      }
+
+      const options: RequestInit = {
+        method,
+        headers,
+      }
+
+      if (body && (method === "POST" || method === "PUT")) {
+        options.body = JSON.stringify(body)
+      }
+
+      const response = await fetch(`${this.keycloakHost}/admin/realms/${this.realm}${endpoint}`, options)
+
+      // Handle non-OK responses
+      if (!response.ok) {
+        let errorData: KeycloakError
+        try {
+          errorData = await response.json()
+        } catch (e) {
+          errorData = {
+            error: `HTTP Error ${response.status}`,
+            error_description: response.statusText,
+          }
+        }
+
+        logger.error(`Keycloak API error: ${errorData.error}`, errorData)
+        throw new Error(errorData.error_description || errorData.error || "Unknown error")
+      }
+
+      // Return empty object for 204 No Content
+      if (response.status === 204) {
+        return {} as T
+      }
+
+      // Parse JSON response
+      return await response.json()
+    } catch (error) {
+      logger.error(`Error in Keycloak API request to ${endpoint}`, error)
+      throw error
+    }
+  }
+
+  // User Profile Management
+
+  /**
+   * Get user by ID
+   */
+  async getUserById(userId: string): Promise<KeycloakUser> {
+    return this.makeRequest<KeycloakUser>(`/users/${userId}`)
+  }
+
+  /**
+   * Get user by username
+   */
+  async getUserByUsername(username: string): Promise<KeycloakUser | null> {
+    const users = await this.makeRequest<KeycloakUser[]>(`/users?username=${encodeURIComponent(username)}`)
+    return users.length > 0 ? users[0] : null
+  }
+
+  /**
+   * Get user by email
+   */
+  async getUserByEmail(email: string): Promise<KeycloakUser | null> {
+    const users = await this.makeRequest<KeycloakUser[]>(`/users?email=${encodeURIComponent(email)}`)
+    return users.length > 0 ? users[0] : null
+  }
+
+  /**
+   * Update user profile
+   */
+  async updateUserProfile(userId: string, userData: KeycloakUserUpdate): Promise<void> {
+    return this.makeRequest<void>(`/users/${userId}`, "PUT", userData)
+  }
+
+  /**
+   * Update user password
+   */
+  async updateUserPassword(userId: string, password: string, temporary = false): Promise<void> {
+    return this.makeRequest<void>(`/users/${userId}/reset-password`, "PUT", {
+      type: "password",
+      value: password,
+      temporary,
+    })
+  }
+
+  // User Administration
+
+  /**
+   * Get all users
+   */
+  async getUsers(search?: string, first?: number, max?: number): Promise<KeycloakUser[]> {
+    let endpoint = "/users"
+    const params = new URLSearchParams()
+
+    if (search) params.append("search", search)
+    if (first !== undefined) params.append("first", first.toString())
+    if (max !== undefined) params.append("max", max.toString())
+
+    const queryString = params.toString()
+    if (queryString) endpoint += `?${queryString}`
+
+    return this.makeRequest<KeycloakUser[]>(endpoint)
+  }
+
+  /**
+   * Create a new user
+   */
+  async createUser(userData: KeycloakUserCreate): Promise<string> {
+    await this.makeRequest<void>("/users", "POST", userData)
+
+    // Keycloak doesn't return the user ID on creation, so we need to fetch it
+    const user = await this.getUserByUsername(userData.username)
+    if (!user) {
+      throw new Error("User was created but could not be retrieved")
+    }
+
+    return user.id
+  }
+
+  /**
+   * Delete a user
+   */
+  async deleteUser(userId: string): Promise<void> {
+    return this.makeRequest<void>(`/users/${userId}`, "DELETE")
+  }
+
+  /**
+   * Enable or disable a user
+   */
+  async setUserEnabled(userId: string, enabled: boolean): Promise<void> {
+    return this.makeRequest<void>(`/users/${userId}`, "PUT", { enabled })
+  }
+
+  /**
+   * Get user roles
+   */
+  async getUserRoles(userId: string): Promise<any[]> {
+    return this.makeRequest<any[]>(`/users/${userId}/role-mappings`)
+  }
+
+  /**
+   * Assign realm role to user
+   */
+  async assignRealmRoleToUser(userId: string, roleName: string): Promise<void> {
+    // First, get the role
+    const roles = await this.makeRequest<any[]>(`/roles`)
+    const role = roles.find((r) => r.name === roleName)
+
+    if (!role) {
+      throw new Error(`Role ${roleName} not found`)
+    }
+
+    // Then assign it
+    return this.makeRequest<void>(`/users/${userId}/role-mappings/realm`, "POST", [role])
+  }
+
+  /**
+   * Remove realm role from user
+   */
+  async removeRealmRoleFromUser(userId: string, roleName: string): Promise<void> {
+    // First, get the role
+    const roles = await this.makeRequest<any[]>(`/roles`)
+    const role = roles.find((r) => r.name === roleName)
+
+    if (!role) {
+      throw new Error(`Role ${roleName} not found`)
+    }
+
+    // Then remove it
+    return this.makeRequest<void>(`/users/${userId}/role-mappings/realm`, "DELETE", [role])
+  }
+}
+
+// Create a singleton instance
+export const keycloakService = new KeycloakService()
