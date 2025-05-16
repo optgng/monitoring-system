@@ -81,7 +81,8 @@ export default function UsersPage() {
         const response = await fetch("/api/admin/users")
 
         if (!response.ok) {
-          throw new Error("Failed to fetch users")
+          const errorData = await response.json()
+          throw new Error(errorData.error || `Failed to fetch users: ${response.status}`)
         }
 
         const data = await response.json()
@@ -91,9 +92,12 @@ export default function UsersPage() {
         console.error("Error fetching users:", error)
         toast({
           title: "Error",
-          description: "Failed to load users",
+          description: (error as Error).message || "Failed to load users",
           variant: "destructive",
         })
+        // Set empty arrays to prevent undefined errors
+        setUsers([])
+        setFilteredUsers([])
       } finally {
         setIsLoading(false)
       }

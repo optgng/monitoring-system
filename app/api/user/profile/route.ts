@@ -14,6 +14,24 @@ export async function GET(req: NextRequest) {
     }
 
     const userId = session.user.id
+    logger.info(`Fetching profile for user ID: ${userId}`)
+
+    // Try to use the session token if available
+    const accessToken = session.accessToken as string
+
+    try {
+      // First attempt: Use the user's own token if available
+      if (accessToken) {
+        logger.info("Using session access token for profile fetch")
+        const user = await keycloakService.getUserById(userId, accessToken)
+        const { access, ...safeUserData } = user
+        return NextResponse.json(safeUserData)
+      }
+    } catch (error) {
+      logger.warn("Failed to fetch profile with session token, falling back to admin token", error)
+    }
+
+    // Second attempt: Use admin token
     const user = await keycloakService.getUserById(userId)
 
     // Remove sensitive information
@@ -41,6 +59,8 @@ export async function PUT(req: NextRequest) {
     // Validate input
     const { firstName, lastName, email } = data
 
+    logger.info(`Updating profile for user ID: ${userId}`, { firstName, lastName, email })
+
     // Create update object with only allowed fields
     const updateData = {
       firstName,
@@ -49,6 +69,21 @@ export async function PUT(req: NextRequest) {
       // Add any other allowed fields here
     }
 
+    // Try to use the session token if available
+    const accessToken = session.accessToken as string
+
+    try {
+      // First attempt: Use the user's own token if available
+      if (accessToken) {
+        logger.info("Using session access token for profile update")
+        await keycloakService.updateUserProfile(userId, updateData, accessToken)
+        return NextResponse.json({ success: true })
+      }
+    } catch (error) {
+      logger.warn("Failed to update profile with session token, falling back to admin token", error)
+    }
+
+    // Second attempt: Use admin token
     await keycloakService.updateUserProfile(userId, updateData)
 
     return NextResponse.json({ success: true })

@@ -50,7 +50,17 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, account }) {
+    async jwt({ token, user, account }) {
+      // If we have an account with an access token, save it to the token
+      if (account?.access_token) {
+        token.accessToken = account.access_token
+      }
+
+      // Forward the user ID if available
+      if (user?.id) {
+        token.id = user.id
+      }
+
       // Initial sign in
       if (account && account.access_token) {
         try {
@@ -63,7 +73,6 @@ export const authOptions: NextAuthOptions = {
 
           // Add roles and tokens to the JWT
           token.roles = [...realmRoles, ...resourceRoles]
-          token.accessToken = account.access_token
           token.refreshToken = account.refresh_token
           token.accessTokenExpires = account.expires_at ? account.expires_at * 1000 : 0
           token.tokenType = account.token_type
@@ -82,11 +91,19 @@ export const authOptions: NextAuthOptions = {
       return refreshAccessToken(token)
     },
     async session({ session, token }) {
+      // Forward the access token and user ID to the client
+      if (token?.accessToken) {
+        session.accessToken = token.accessToken
+      }
+
+      if (token?.id && session.user) {
+        session.user.id = token.id as string
+      }
+
       // Add user roles and ID to the session
       if (token) {
         session.user.roles = (token.roles as string[]) || []
         session.user.id = token.sub || ""
-        session.accessToken = token.accessToken as string
         session.error = token.error as string | undefined
       }
       return session

@@ -67,6 +67,8 @@ export class KeycloakService {
     this.realm = issuerUrl.split("/realms/")[1] || "monitoring"
     this.clientId = process.env.KEYCLOAK_CLIENT_ID || ""
     this.clientSecret = process.env.KEYCLOAK_CLIENT_SECRET || ""
+
+    logger.info(`Initialized KeycloakService with realm: ${this.realm}, clientId: ${this.clientId}`)
   }
 
   /**
@@ -79,7 +81,12 @@ export class KeycloakService {
     }
 
     try {
-      const response = await fetch(`${this.keycloakHost}/realms/master/protocol/openid-connect/token`, {
+      // IMPORTANT: Use the monitoring realm for token endpoint, not master realm
+      const tokenUrl = `${this.keycloakHost}/realms/${this.realm}/protocol/openid-connect/token`
+
+      logger.info(`Requesting admin token from: ${tokenUrl}`)
+
+      const response = await fetch(tokenUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -93,7 +100,11 @@ export class KeycloakService {
 
       if (!response.ok) {
         const error = await response.json()
-        logger.error("Failed to get admin token", error)
+        logger.error("Failed to get admin token", {
+          status: response.status,
+          statusText: response.statusText,
+          error,
+        })
         throw new Error(`Failed to get admin token: ${error.error_description || error.error || "Unknown error"}`)
       }
 
@@ -101,6 +112,9 @@ export class KeycloakService {
       this.adminToken = data.access_token
       // Set expiry to slightly before the actual expiry to avoid edge cases
       this.adminTokenExpiry = Date.now() + (data.expires_in - 60) * 1000
+
+      logger.info("Successfully obtained admin token")
+
       return this.adminToken
     } catch (error) {
       logger.error("Error getting admin token", error)
@@ -114,7 +128,17 @@ export class KeycloakService {
   private async makeRequest<T>(endpoint: string, method = "GET", body?: any, userToken?: string): Promise<T> {
     try {
       // Determine which token to use
-      const token = userToken || (await this.getAdminToken())
+      let token: string
+
+      if (userToken) {
+        // Use the provided user token
+        token = userToken
+        logger.info(`Using provided user token for request to ${endpoint}`)
+      } else {
+        // Get admin token
+        token = await this.getAdminToken()
+        logger.info(`Using admin token for request to ${endpoint}`)
+      }
 
       const headers: HeadersInit = {
         Authorization: `Bearer ${token}`,
@@ -130,7 +154,12 @@ export class KeycloakService {
         options.body = JSON.stringify(body)
       }
 
-      const response = await fetch(`${this.keycloakHost}/admin/realms/${this.realm}${endpoint}`, options)
+      // IMPORTANT: Use the correct realm for admin API endpoints
+      const url = `${this.keycloakHost}/admin/realms/${this.realm}${endpoint}`
+
+      logger.info(`Making ${method} request to: ${url}`)
+
+      const response = await fetch(url, options)
 
       // Handle non-OK responses
       if (!response.ok) {
@@ -144,7 +173,11 @@ export class KeycloakService {
           }
         }
 
-        logger.error(`Keycloak API error: ${errorData.error}`, errorData)
+        logger.error(`Keycloak API error: ${errorData.error}`, {
+          status: response.status,
+          endpoint,
+          errorData,
+        })
         throw new Error(errorData.error_description || errorData.error || "Unknown error")
       }
 
@@ -166,8 +199,8 @@ export class KeycloakService {
   /**
    * Get user by ID
    */
-  async getUserById(userId: string): Promise<KeycloakUser> {
-    return this.makeRequest<KeycloakUser>(`/users/${userId}`)
+  async getUserById(userId: string, userToken?: string): Promise<KeycloakUser> {
+    return this.makeRequest<KeycloakUser>(`/users/${userId}`, "GET", undefined, userToken)
   }
 
   /**
@@ -189,8 +222,8 @@ export class KeycloakService {
   /**
    * Update user profile
    */
-  async updateUserProfile(userId: string, userData: KeycloakUserUpdate): Promise<void> {
-    return this.makeRequest<void>(`/users/${userId}`, "PUT", userData)
+  async updateUserProfile(userId: string, userData: KeycloakUserUpdate, userToken?: string): Promise<void> {
+    return this.makeRequest<void>(`/users/${userId}`, "PUT", userData, userToken)
   }
 
   /**
