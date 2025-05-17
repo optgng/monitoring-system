@@ -10,13 +10,13 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
-import { MessageSquare } from "lucide-react"
+import { MessageSquare, Loader2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export default function ProfilePage() {
-  const { data: session, update: updateSession } = useSession()
+  const { data: session, update: updateSession, status } = useSession()
   const { toast } = useToast()
   const router = useRouter()
 
@@ -56,6 +56,13 @@ export default function ProfilePage() {
 
   // Fetch user profile - using useCallback to prevent infinite loops
   const fetchProfile = useCallback(async () => {
+    // Проверяем, что сессия загружена и пользователь авторизован
+    if (status === "loading") return
+    if (status === "unauthenticated") {
+      router.push("/login")
+      return
+    }
+
     if (!session?.user?.id) {
       setIsLoadingProfile(false)
       return
@@ -69,7 +76,7 @@ export default function ProfilePage() {
       const response = await fetch("/api/user/profile")
 
       if (!response.ok) {
-        const errorData = await response.json()
+        const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`)
       }
 
@@ -94,7 +101,7 @@ export default function ProfilePage() {
     } finally {
       setIsLoadingProfile(false)
     }
-  }, [session?.user?.id, toast])
+  }, [session?.user?.id, toast, status, router])
 
   // Load profile data when session is available
   useEffect(() => {
@@ -124,7 +131,7 @@ export default function ProfilePage() {
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
+        const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || "Failed to update profile")
       }
 
@@ -195,7 +202,7 @@ export default function ProfilePage() {
       })
 
       if (!response.ok) {
-        const data = await response.json()
+        const data = await response.json().catch(() => ({}))
         throw new Error(data.error || "Failed to update password")
       }
 
@@ -236,6 +243,27 @@ export default function ProfilePage() {
   // Retry loading profile data
   const handleRetry = () => {
     fetchProfile()
+  }
+
+  // Показываем состояние загрузки сессии
+  if (status === "loading") {
+    return (
+      <div className="flex flex-col gap-4">
+        <h1 className="text-3xl font-bold tracking-tight">Профиль пользователя</h1>
+        <Card className="p-6">
+          <div className="flex flex-col items-center justify-center text-center gap-4 py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-muted-foreground">Загрузка данных пользователя...</p>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
+  // Показываем ошибку, если пользователь не авторизован
+  if (status === "unauthenticated") {
+    router.push("/login")
+    return null
   }
 
   // Show error state if fetch failed

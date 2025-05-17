@@ -140,12 +140,12 @@ export default function Sidebar({ className }: SidebarProps) {
             <h2 className="mb-2 px-2 text-lg font-semibold tracking-tight">Администрирование</h2>
             <div className="space-y-1">
               <Button
-                variant={pathname === "/users" ? "secondary" : "ghost"}
+                variant={pathname === "/admin/users" ? "secondary" : "ghost"}
                 size="sm"
                 className="w-full justify-start"
                 asChild
               >
-                <Link href="/users">
+                <Link href="/admin/users">
                   <Users className="mr-2 h-4 w-4" />
                   Пользователи
                 </Link>

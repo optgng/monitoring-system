@@ -21,9 +21,10 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
-import { PlusCircle, Search, Edit, Trash2, Lock, UserCheck, UserX, RefreshCw } from "lucide-react"
+import { PlusCircle, Search, Edit, Lock, UserCheck, UserX, RefreshCw, Loader2 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
+import { useRouter } from "next/navigation"
 
 // Define user type
 interface User {
@@ -39,8 +40,9 @@ interface User {
 }
 
 export default function UsersPage() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const { toast } = useToast()
+  const router = useRouter()
 
   // Users state
   const [users, setUsers] = useState<User[]>([])
@@ -52,14 +54,12 @@ export default function UsersPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isCreatingUser, setIsCreatingUser] = useState(false)
   const [isUpdatingUser, setIsUpdatingUser] = useState(false)
-  const [isDeletingUser, setIsDeletingUser] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
   // Dialog states
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false)
 
   // Form states
@@ -74,7 +74,6 @@ export default function UsersPage() {
 
   const [editUser, setEditUser] = useState<User | null>(null)
   const [editUserRole, setEditUserRole] = useState("user")
-  const [deleteUserId, setDeleteUserId] = useState<string | null>(null)
   const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null)
   const [newPassword, setNewPassword] = useState("")
   const [temporaryPassword, setTemporaryPassword] = useState(true)
@@ -85,7 +84,7 @@ export default function UsersPage() {
       const response = await fetch("/api/admin/roles")
 
       if (!response.ok) {
-        const errorData = await response.json()
+        const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`)
       }
 
@@ -105,16 +104,24 @@ export default function UsersPage() {
 
   // Fetch users
   const fetchUsers = useCallback(async () => {
+    // Проверяем, что сессия загружена и пользователь авторизован
+    if (status === "loading") return
+    if (status === "unauthenticated") {
+      router.push("/login")
+      return
+    }
+
     if (!session) return
 
     try {
       setIsLoading(true)
       setFetchError(null)
 
+      console.log("Fetching users data...")
       const response = await fetch("/api/admin/users")
 
       if (!response.ok) {
-        const errorData = await response.json()
+        const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`)
       }
 
@@ -137,15 +144,13 @@ export default function UsersPage() {
       setIsLoading(false)
       setIsRefreshing(false)
     }
-  }, [session, toast])
+  }, [session, toast, status, router])
 
   // Load data when session is available
   useEffect(() => {
-    if (session) {
-      fetchUsers()
-      fetchRoles()
-    }
-  }, [session, fetchUsers, fetchRoles])
+    fetchUsers()
+    fetchRoles()
+  }, [fetchUsers, fetchRoles])
 
   // Filter users based on search query
   useEffect(() => {
@@ -195,7 +200,7 @@ export default function UsersPage() {
       })
 
       if (!response.ok) {
-        const data = await response.json()
+        const data = await response.json().catch(() => ({}))
         throw new Error(data.error || "Failed to create user")
       }
 
@@ -256,7 +261,7 @@ export default function UsersPage() {
       })
 
       if (!response.ok) {
-        const data = await response.json()
+        const data = await response.json().catch(() => ({}))
         throw new Error(data.error || "Failed to update user")
       }
 
@@ -282,45 +287,6 @@ export default function UsersPage() {
     }
   }
 
-  // Handle delete user
-  const handleDeleteUser = async () => {
-    if (!deleteUserId) return
-
-    try {
-      setIsDeletingUser(true)
-
-      const response = await fetch(`/api/admin/users/${deleteUserId}`, {
-        method: "DELETE",
-      })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || "Failed to delete user")
-      }
-
-      // Close dialog
-      setDeleteDialogOpen(false)
-
-      // Update users list
-      setUsers(users.filter((user) => user.id !== deleteUserId))
-
-      toast({
-        title: "Успех",
-        description: "Пользователь успешно удален",
-      })
-    } catch (error) {
-      console.error("Error deleting user:", error)
-      toast({
-        title: "Ошибка",
-        description: (error as Error).message || "Не удалось удалить пользователя",
-        variant: "destructive",
-      })
-    } finally {
-      setIsDeletingUser(false)
-      setDeleteUserId(null)
-    }
-  }
-
   // Handle reset password
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -340,7 +306,7 @@ export default function UsersPage() {
       })
 
       if (!response.ok) {
-        const data = await response.json()
+        const data = await response.json().catch(() => ({}))
         throw new Error(data.error || "Failed to reset password")
       }
 
@@ -379,7 +345,7 @@ export default function UsersPage() {
       })
 
       if (!response.ok) {
-        const data = await response.json()
+        const data = await response.json().catch(() => ({}))
         throw new Error(data.error || "Failed to update user status")
       }
 
@@ -412,6 +378,27 @@ export default function UsersPage() {
       default:
         return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
     }
+  }
+
+  // Показываем состояние загрузки сессии
+  if (status === "loading") {
+    return (
+      <div className="flex flex-col gap-4">
+        <h1 className="text-3xl font-bold tracking-tight">Управление пользователями</h1>
+        <Card className="p-6">
+          <div className="flex flex-col items-center justify-center text-center gap-4 py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-muted-foreground">Загрузка данных пользователя...</p>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
+  // Показываем ошибку, если пользователь не авторизован
+  if (status === "unauthenticated") {
+    router.push("/login")
+    return null
   }
 
   // Show error state if fetch failed
@@ -581,7 +568,6 @@ export default function UsersPage() {
                         <Skeleton className="h-8 w-8 rounded" />
                         <Skeleton className="h-8 w-8 rounded" />
                         <Skeleton className="h-8 w-8 rounded" />
-                        <Skeleton className="h-8 w-8 rounded" />
                       </div>
                     </TableCell>
                   </TableRow>
@@ -653,16 +639,6 @@ export default function UsersPage() {
                           onClick={() => handleToggleUserStatus(user.id, user.enabled)}
                         >
                           {user.enabled ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => {
-                            setDeleteUserId(user.id)
-                            setDeleteDialogOpen(true)
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -750,26 +726,6 @@ export default function UsersPage() {
               </DialogFooter>
             </form>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete User Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Удалить пользователя</DialogTitle>
-            <DialogDescription>
-              Вы уверены, что хотите удалить этого пользователя? Это действие нельзя отменить.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Отмена
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteUser} disabled={isDeletingUser}>
-              {isDeletingUser ? "Удаление..." : "Удалить"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 

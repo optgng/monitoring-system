@@ -3,18 +3,18 @@ import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import { keycloakService } from "@/lib/keycloak-service"
 import { logger } from "@/lib/logger"
+import { hasPermission, getCurrentUser } from "@/lib/auth"
 
 // GET all users
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
+    const currentUser = await getCurrentUser()
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!currentUser || !hasPermission(currentUser, "manage_users")) {
+      logger.warn("Unauthorized access attempt to users API")
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
     }
-
-    // Check if user has admin role
-    // In a real app, you would check for admin permissions here
 
     const searchParams = req.nextUrl.searchParams
     const search = searchParams.get("search") || undefined
@@ -55,13 +55,12 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
+    const currentUser = await getCurrentUser()
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!currentUser || !hasPermission(currentUser, "manage_users")) {
+      logger.warn("Unauthorized access attempt to create user")
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
     }
-
-    // Check if user has admin role
-    // In a real app, you would check for admin permissions here
 
     const data = await req.json()
 
