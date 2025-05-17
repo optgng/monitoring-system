@@ -11,19 +11,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { ThemeToggle } from "./theme-toggle"
 import { useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { signOutWithErrorHandling } from "@/lib/auth-utils"
 import { logger } from "@/lib/logger"
 
 export default function Header() {
   const [notifications, setNotifications] = useState(3)
-  const { data: session, status } = useSession()
+  const { data: session, status, update } = useSession()
   const router = useRouter()
+  const pathname = usePathname()
   const [isSigningOut, setIsSigningOut] = useState(false)
 
   // Check for session errors
@@ -32,6 +33,17 @@ export default function Header() {
       logger.error("Session error detected in header", { error: session.error })
     }
   }, [session])
+
+  // Force refresh session when returning to profile page
+  useEffect(() => {
+    const refreshSession = async () => {
+      if (pathname === "/profile") {
+        await update()
+      }
+    }
+
+    refreshSession()
+  }, [pathname, update])
 
   const handleSignOut = async () => {
     try {
@@ -98,7 +110,6 @@ export default function Header() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
                 <Avatar>
-                  <AvatarImage src={session?.user?.image || ""} alt="Аватар" />
                   <AvatarFallback>{getInitials()}</AvatarFallback>
                 </Avatar>
               </Button>

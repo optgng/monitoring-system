@@ -8,15 +8,16 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
 import { MessageSquare } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
+import { useRouter } from "next/navigation"
 
 export default function ProfilePage() {
-  const { data: session } = useSession()
+  const { data: session, update: updateSession } = useSession()
   const { toast } = useToast()
+  const router = useRouter()
 
   // Profile state
   const [profile, setProfile] = useState({
@@ -24,7 +25,6 @@ export default function ProfilePage() {
     lastName: "",
     email: "",
     phone: "",
-    position: "",
   })
 
   // Password state
@@ -64,19 +64,20 @@ export default function ProfilePage() {
         }
 
         const data = await response.json()
+        console.log("Profile data:", data)
 
         setProfile({
           firstName: data.firstName || "",
           lastName: data.lastName || "",
           email: data.email || "",
+          // Correctly map the phone attribute from Keycloak
           phone: data.attributes?.phone?.[0] || "",
-          position: data.attributes?.position?.[0] || "",
         })
       } catch (error) {
         console.error("Error fetching profile:", error)
         toast({
-          title: "Error",
-          description: "Failed to load profile data",
+          title: "Ошибка",
+          description: "Не удалось загрузить данные профиля",
           variant: "destructive",
         })
       } finally {
@@ -107,24 +108,37 @@ export default function ProfilePage() {
           email: profile.email,
           attributes: {
             phone: [profile.phone],
-            position: [profile.position],
           },
         }),
       })
 
       if (!response.ok) {
-        throw new Error("Failed to update profile")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to update profile")
       }
 
+      // Update the session to reflect the changes
+      await updateSession({
+        ...session,
+        user: {
+          ...session?.user,
+          name: `${profile.firstName} ${profile.lastName}`,
+          email: profile.email,
+        },
+      })
+
+      // Force a refresh to update the header
+      router.refresh()
+
       toast({
-        title: "Success",
-        description: "Profile updated successfully",
+        title: "Успех",
+        description: "Профиль успешно обновлен",
       })
     } catch (error) {
       console.error("Error updating profile:", error)
       toast({
-        title: "Error",
-        description: "Failed to update profile",
+        title: "Ошибка",
+        description: (error as Error).message || "Не удалось обновить профиль",
         variant: "destructive",
       })
     } finally {
@@ -139,8 +153,8 @@ export default function ProfilePage() {
     // Validate passwords
     if (passwords.newPassword !== passwords.confirmPassword) {
       toast({
-        title: "Error",
-        description: "Passwords do not match",
+        title: "Ошибка",
+        description: "Пароли не совпадают",
         variant: "destructive",
       })
       return
@@ -148,8 +162,8 @@ export default function ProfilePage() {
 
     if (passwords.newPassword.length < 8) {
       toast({
-        title: "Error",
-        description: "Password must be at least 8 characters long",
+        title: "Ошибка",
+        description: "Пароль должен содержать не менее 8 символов",
         variant: "destructive",
       })
       return
@@ -182,14 +196,14 @@ export default function ProfilePage() {
       })
 
       toast({
-        title: "Success",
-        description: "Password updated successfully",
+        title: "Успех",
+        description: "Пароль успешно обновлен",
       })
     } catch (error) {
       console.error("Error updating password:", error)
       toast({
-        title: "Error",
-        description: (error as Error).message || "Failed to update password",
+        title: "Ошибка",
+        description: (error as Error).message || "Не удалось обновить пароль",
         variant: "destructive",
       })
     } finally {
@@ -201,10 +215,10 @@ export default function ProfilePage() {
   const handleNotificationSettingsUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // In a real application, you would save these settings to your backend
+    // В реальном приложении здесь был бы код для сохранения настроек уведомлений
     toast({
-      title: "Success",
-      description: "Notification settings updated successfully",
+      title: "Успех",
+      description: "Настройки уведомлений успешно обновлены",
     })
   }
 
@@ -229,17 +243,6 @@ export default function ProfilePage() {
                 <CardDescription>Обновите ваши личные данные и контактную информацию</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <Avatar className="h-20 w-20">
-                    <AvatarImage src={session?.user?.image || "/placeholder.svg"} alt="Аватар" />
-                    <AvatarFallback>
-                      {profile.firstName && profile.lastName ? `${profile.firstName[0]}${profile.lastName[0]}` : "АД"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <Button type="button" variant="outline">
-                    Изменить аватар
-                  </Button>
-                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="firstName">Имя</Label>
@@ -276,15 +279,6 @@ export default function ProfilePage() {
                       type="tel"
                       value={profile.phone}
                       onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-                      disabled={isLoadingProfile}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="position">Должность</Label>
-                    <Input
-                      id="position"
-                      value={profile.position}
-                      onChange={(e) => setProfile({ ...profile, position: e.target.value })}
                       disabled={isLoadingProfile}
                     />
                   </div>

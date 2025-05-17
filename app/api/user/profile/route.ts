@@ -57,16 +57,16 @@ export async function PUT(req: NextRequest) {
     const data = await req.json()
 
     // Validate input
-    const { firstName, lastName, email } = data
+    const { firstName, lastName, email, attributes } = data
 
-    logger.info(`Updating profile for user ID: ${userId}`, { firstName, lastName, email })
+    logger.info(`Updating profile for user ID: ${userId}`, { firstName, lastName, email, attributes })
 
     // Create update object with only allowed fields
     const updateData = {
       firstName,
       lastName,
       email,
-      // Add any other allowed fields here
+      attributes,
     }
 
     // Try to use the session token if available

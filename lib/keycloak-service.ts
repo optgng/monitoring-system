@@ -19,6 +19,7 @@ export interface KeycloakUser {
     manage: boolean
   }
   createdTimestamp?: number
+  roles?: string[]
 }
 
 export interface KeycloakUserCreate {
@@ -288,8 +289,8 @@ export class KeycloakService {
   /**
    * Get user roles
    */
-  async getUserRoles(userId: string): Promise<any[]> {
-    return this.makeRequest<any[]>(`/users/${userId}/role-mappings`)
+  async getUserRoles(userId: string): Promise<any> {
+    return this.makeRequest<any>(`/users/${userId}/role-mappings`)
   }
 
   /**
