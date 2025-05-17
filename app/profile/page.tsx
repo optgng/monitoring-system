@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -41,6 +41,9 @@ export default function ProfilePage() {
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
+  // Используем useRef для отслеживания, был ли уже выполнен запрос
+  const fetchedRef = useRef(false)
+
   // Notification settings
   const [notificationSettings, setNotificationSettings] = useState({
     email: true,
@@ -54,19 +57,10 @@ export default function ProfilePage() {
     },
   })
 
-  // Fetch user profile - using useCallback to prevent infinite loops
-  const fetchProfile = useCallback(async () => {
+  // Fetch user profile - без useCallback для предотвращения бесконечного цикла
+  const fetchProfile = async () => {
     // Проверяем, что сессия загружена и пользователь авторизован
-    if (status === "loading") return
-    if (status === "unauthenticated") {
-      router.push("/login")
-      return
-    }
-
-    if (!session?.user?.id) {
-      setIsLoadingProfile(false)
-      return
-    }
+    if (status !== "authenticated") return
 
     try {
       setIsLoadingProfile(true)
@@ -101,12 +95,21 @@ export default function ProfilePage() {
     } finally {
       setIsLoadingProfile(false)
     }
-  }, [session?.user?.id, toast, status, router])
+  }
 
-  // Load profile data when session is available
+  // Load profile data when session is available - с правильными зависимостями
   useEffect(() => {
-    fetchProfile()
-  }, [fetchProfile])
+    // Проверяем, что сессия аутентифицирована и запрос еще не был выполнен
+    if (status === "authenticated" && !fetchedRef.current) {
+      fetchedRef.current = true // Отмечаем, что запрос выполняется
+      fetchProfile()
+    }
+
+    // Сбрасываем флаг, если пользователь вышел из системы
+    if (status === "unauthenticated") {
+      fetchedRef.current = false
+    }
+  }, [status]) // Зависимость только от статуса аутентификации
 
   // Handle profile update
   const handleProfileUpdate = async (e: React.FormEvent) => {
@@ -242,6 +245,7 @@ export default function ProfilePage() {
 
   // Retry loading profile data
   const handleRetry = () => {
+    fetchedRef.current = false // Сбрасываем флаг, чтобы разрешить повторную загрузку
     fetchProfile()
   }
 
