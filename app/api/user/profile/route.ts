@@ -5,6 +5,65 @@ import { logger } from "@/lib/logger"
 import { keycloakService } from "@/lib/keycloak"
 import { profileCache } from "@/lib/cache"
 
+// GET current user profile
+export async function GET(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+
+    if (!session?.user?.id) {
+      logger.warn("Unauthorized access attempt to user profile")
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const userId = session.user.id
+
+    // Проверяем, есть ли данные в кэше
+    const cachedData = profileCache.get(userId)
+    if (cachedData) {
+      logger.info(`Returning cached profile for user ${userId}`)
+
+      // Устанавливаем заголовки для предотвращения кэширования на стороне браузера
+      return new NextResponse(JSON.stringify(cachedData), {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      })
+    }
+
+    logger.info(`Fetching profile for user ID: ${userId}`)
+
+    // Получаем данные пользователя
+    const user = await keycloakService.getUserById(userId)
+
+    // Удаляем чувствительную информацию
+    const { access, ...safeUserData } = user
+
+    logger.info(`Successfully fetched profile for user ${userId}`, {
+      hasAttributes: !!safeUserData.attributes,
+      attributeKeys: safeUserData.attributes ? Object.keys(safeUserData.attributes) : [],
+    })
+
+    // Сохраняем данные в кэш
+    profileCache.set(userId, safeUserData)
+
+    // Устанавливаем заголовки для предотвращения кэширования на стороне браузера
+    return new NextResponse(JSON.stringify(safeUserData), {
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+      },
+    })
+  } catch (error) {
+    logger.error("Error fetching user profile", error)
+    return NextResponse.json({ error: (error as Error).message || "Failed to fetch user profile" }, { status: 500 })
+  }
+}
+
 // PUT update user profile
 export async function PUT(req: NextRequest) {
   try {

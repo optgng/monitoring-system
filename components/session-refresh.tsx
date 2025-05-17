@@ -2,6 +2,7 @@
 
 import { useSession } from "next-auth/react"
 import { useEffect, useState, useRef } from "react"
+import { usePathname } from "next/navigation"
 import { logger } from "@/lib/logger"
 import { handleSessionError } from "@/lib/auth-utils"
 
@@ -15,8 +16,9 @@ export function SessionRefresh() {
   const lastRefreshAttempt = useRef<number>(0)
   const isRefreshing = useRef<boolean>(false)
 
-  // Флаг для отключения автоматического обновления на странице профиля
-  const isProfilePage = typeof window !== "undefined" && window.location.pathname.includes("/profile")
+  // Получаем текущий путь для проверки, находимся ли мы на странице профиля
+  const pathname = usePathname()
+  const isProfilePage = pathname?.includes("/profile")
 
   useEffect(() => {
     // Clear any existing interval when component unmounts or session changes
