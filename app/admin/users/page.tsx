@@ -39,6 +39,9 @@ interface User {
   roles?: string[]
 }
 
+// Определяем доступные роли
+const AVAILABLE_ROLES = ["admin", "manager", "support"]
+
 export default function UsersPage() {
   const { data: session, status } = useSession()
   const { toast } = useToast()
@@ -48,7 +51,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [filteredUsers, setFilteredUsers] = useState<User[]>([])
   const [searchQuery, setSearchQuery] = useState("")
-  const [availableRoles, setAvailableRoles] = useState<string[]>([])
+  const [availableRoles, setAvailableRoles] = useState<string[]>(AVAILABLE_ROLES)
 
   // Loading states
   const [isLoading, setIsLoading] = useState(true)
@@ -77,30 +80,6 @@ export default function UsersPage() {
   const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null)
   const [newPassword, setNewPassword] = useState("")
   const [temporaryPassword, setTemporaryPassword] = useState(true)
-
-  // Fetch available roles
-  const fetchRoles = useCallback(async () => {
-    try {
-      const response = await fetch("/api/admin/roles")
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      setAvailableRoles(data.map((role: any) => role.name))
-    } catch (error) {
-      console.error("Error fetching roles:", error)
-      toast({
-        title: "Ошибка",
-        description: "Не удалось загрузить список ролей",
-        variant: "destructive",
-      })
-      // Set default roles
-      setAvailableRoles(["admin", "user", "manager", "support"])
-    }
-  }, [toast])
 
   // Fetch users
   const fetchUsers = useCallback(async () => {
@@ -149,8 +128,7 @@ export default function UsersPage() {
   // Load data when session is available
   useEffect(() => {
     fetchUsers()
-    fetchRoles()
-  }, [fetchUsers, fetchRoles])
+  }, [fetchUsers])
 
   // Filter users based on search query
   useEffect(() => {
@@ -184,6 +162,9 @@ export default function UsersPage() {
     try {
       setIsCreatingUser(true)
 
+      // Проверяем, что роль выбрана из доступных
+      const role = AVAILABLE_ROLES.includes(newUser.role) ? newUser.role : AVAILABLE_ROLES[0]
+
       const response = await fetch("/api/admin/users", {
         method: "POST",
         headers: {
@@ -195,7 +176,7 @@ export default function UsersPage() {
           lastName: newUser.lastName,
           email: newUser.email,
           password: newUser.password,
-          roles: [newUser.role],
+          roles: [role],
         }),
       })
 
@@ -220,6 +201,7 @@ export default function UsersPage() {
       // Refresh users
       fetchUsers()
 
+      // Показываем уведомление об успехе
       toast({
         title: "Успех",
         description: "Пользователь успешно создан",
@@ -245,6 +227,9 @@ export default function UsersPage() {
     try {
       setIsUpdatingUser(true)
 
+      // Проверяем, что роль выбрана из доступных
+      const role = AVAILABLE_ROLES.includes(editUserRole) ? editUserRole : AVAILABLE_ROLES[0]
+
       const response = await fetch(`/api/admin/users/${editUser.id}`, {
         method: "PUT",
         headers: {
@@ -255,8 +240,7 @@ export default function UsersPage() {
           lastName: editUser.lastName,
           email: editUser.email,
           enabled: editUser.enabled,
-          emailVerified: editUser.emailVerified,
-          roles: [editUserRole],
+          roles: [role],
         }),
       })
 
@@ -271,6 +255,7 @@ export default function UsersPage() {
       // Refresh users
       fetchUsers()
 
+      // Показываем уведомление об успехе
       toast({
         title: "Успех",
         description: "Пользователь успешно обновлен",
@@ -513,7 +498,7 @@ export default function UsersPage() {
                           <SelectValue placeholder="Выберите роль" />
                         </SelectTrigger>
                         <SelectContent>
-                          {availableRoles.map((role) => (
+                          {AVAILABLE_ROLES.map((role) => (
                             <SelectItem key={role} value={role}>
                               {role.charAt(0).toUpperCase() + role.slice(1)}
                             </SelectItem>
@@ -694,7 +679,7 @@ export default function UsersPage() {
                       <SelectValue placeholder="Выберите роль" />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableRoles.map((role) => (
+                      {AVAILABLE_ROLES.map((role) => (
                         <SelectItem key={role} value={role}>
                           {role.charAt(0).toUpperCase() + role.slice(1)}
                         </SelectItem>
@@ -709,14 +694,6 @@ export default function UsersPage() {
                     onCheckedChange={(checked) => setEditUser({ ...editUser, enabled: checked })}
                   />
                   <Label htmlFor="edit-enabled">Активен</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="edit-emailVerified"
-                    checked={editUser.emailVerified}
-                    onCheckedChange={(checked) => setEditUser({ ...editUser, emailVerified: checked })}
-                  />
-                  <Label htmlFor="edit-emailVerified">Email подтвержден</Label>
                 </div>
               </div>
               <DialogFooter>
