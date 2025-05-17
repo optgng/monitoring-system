@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
     const session = await getServerSession(authOptions)
 
     if (!session?.user?.id) {
+      logger.warn("Unauthorized access attempt to user profile")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -25,6 +26,12 @@ export async function GET(req: NextRequest) {
         logger.info("Using session access token for profile fetch")
         const user = await keycloakService.getUserById(userId, accessToken)
         const { access, ...safeUserData } = user
+
+        logger.info(`Successfully fetched profile for user ${userId}`, {
+          hasAttributes: !!safeUserData.attributes,
+          attributeKeys: safeUserData.attributes ? Object.keys(safeUserData.attributes) : [],
+        })
+
         return NextResponse.json(safeUserData)
       }
     } catch (error) {
@@ -37,10 +44,15 @@ export async function GET(req: NextRequest) {
     // Remove sensitive information
     const { access, ...safeUserData } = user
 
+    logger.info(`Successfully fetched profile for user ${userId} using admin token`, {
+      hasAttributes: !!safeUserData.attributes,
+      attributeKeys: safeUserData.attributes ? Object.keys(safeUserData.attributes) : [],
+    })
+
     return NextResponse.json(safeUserData)
   } catch (error) {
     logger.error("Error fetching user profile", error)
-    return NextResponse.json({ error: "Failed to fetch user profile" }, { status: 500 })
+    return NextResponse.json({ error: (error as Error).message || "Failed to fetch user profile" }, { status: 500 })
   }
 }
 
@@ -50,6 +62,7 @@ export async function PUT(req: NextRequest) {
     const session = await getServerSession(authOptions)
 
     if (!session?.user?.id) {
+      logger.warn("Unauthorized access attempt to update user profile")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -77,6 +90,7 @@ export async function PUT(req: NextRequest) {
       if (accessToken) {
         logger.info("Using session access token for profile update")
         await keycloakService.updateUserProfile(userId, updateData, accessToken)
+        logger.info(`Successfully updated profile for user ${userId} using session token`)
         return NextResponse.json({ success: true })
       }
     } catch (error) {
@@ -85,10 +99,11 @@ export async function PUT(req: NextRequest) {
 
     // Second attempt: Use admin token
     await keycloakService.updateUserProfile(userId, updateData)
+    logger.info(`Successfully updated profile for user ${userId} using admin token`)
 
     return NextResponse.json({ success: true })
   } catch (error) {
     logger.error("Error updating user profile", error)
-    return NextResponse.json({ error: "Failed to update user profile" }, { status: 500 })
+    return NextResponse.json({ error: (error as Error).message || "Failed to update user profile" }, { status: 500 })
   }
 }

@@ -124,6 +124,43 @@ export class KeycloakService {
   }
 
   /**
+   * Verify a user's password by attempting to get a token
+   */
+  async verifyPassword(username: string, password: string): Promise<boolean> {
+    try {
+      const tokenUrl = `${this.keycloakHost}/realms/${this.realm}/protocol/openid-connect/token`
+
+      const response = await fetch(tokenUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          grant_type: "password",
+          client_id: this.clientId,
+          client_secret: this.clientSecret,
+          username,
+          password,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        logger.warn("Password verification failed", {
+          username,
+          error: error.error_description || error.error,
+        })
+        return false
+      }
+
+      return true
+    } catch (error) {
+      logger.error("Error verifying password", error)
+      return false
+    }
+  }
+
+  /**
    * Make an authenticated request to the Keycloak API
    */
   private async makeRequest<T>(endpoint: string, method = "GET", body?: any, userToken?: string): Promise<T> {
@@ -294,11 +331,18 @@ export class KeycloakService {
   }
 
   /**
+   * Get available realm roles
+   */
+  async getRealmRoles(): Promise<any[]> {
+    return this.makeRequest<any[]>(`/roles`)
+  }
+
+  /**
    * Assign realm role to user
    */
   async assignRealmRoleToUser(userId: string, roleName: string): Promise<void> {
     // First, get the role
-    const roles = await this.makeRequest<any[]>(`/roles`)
+    const roles = await this.getRealmRoles()
     const role = roles.find((r) => r.name === roleName)
 
     if (!role) {
@@ -314,7 +358,7 @@ export class KeycloakService {
    */
   async removeRealmRoleFromUser(userId: string, roleName: string): Promise<void> {
     // First, get the role
-    const roles = await this.makeRequest<any[]>(`/roles`)
+    const roles = await this.getRealmRoles()
     const role = roles.find((r) => r.name === roleName)
 
     if (!role) {

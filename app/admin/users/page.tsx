@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -21,7 +21,9 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
-import { PlusCircle, Search, Edit, Trash2, Lock, UserCheck, UserX } from "lucide-react"
+import { PlusCircle, Search, Edit, Trash2, Lock, UserCheck, UserX, RefreshCw } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Badge } from "@/components/ui/badge"
 
 // Define user type
 interface User {
@@ -33,6 +35,7 @@ interface User {
   enabled: boolean
   emailVerified: boolean
   createdTimestamp?: number
+  roles?: string[]
 }
 
 export default function UsersPage() {
@@ -43,12 +46,15 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [filteredUsers, setFilteredUsers] = useState<User[]>([])
   const [searchQuery, setSearchQuery] = useState("")
+  const [availableRoles, setAvailableRoles] = useState<string[]>([])
 
   // Loading states
   const [isLoading, setIsLoading] = useState(true)
   const [isCreatingUser, setIsCreatingUser] = useState(false)
   const [isUpdatingUser, setIsUpdatingUser] = useState(false)
   const [isDeletingUser, setIsDeletingUser] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
   // Dialog states
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -73,40 +79,73 @@ export default function UsersPage() {
   const [newPassword, setNewPassword] = useState("")
   const [temporaryPassword, setTemporaryPassword] = useState(true)
 
-  // Fetch users
-  useEffect(() => {
-    async function fetchUsers() {
-      try {
-        setIsLoading(true)
-        const response = await fetch("/api/admin/users")
+  // Fetch available roles
+  const fetchRoles = useCallback(async () => {
+    try {
+      const response = await fetch("/api/admin/roles")
 
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.error || `Failed to fetch users: ${response.status}`)
-        }
-
-        const data = await response.json()
-        setUsers(data)
-        setFilteredUsers(data)
-      } catch (error) {
-        console.error("Error fetching users:", error)
-        toast({
-          title: "Error",
-          description: (error as Error).message || "Failed to load users",
-          variant: "destructive",
-        })
-        // Set empty arrays to prevent undefined errors
-        setUsers([])
-        setFilteredUsers([])
-      } finally {
-        setIsLoading(false)
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`)
       }
-    }
 
-    if (session) {
-      fetchUsers()
+      const data = await response.json()
+      setAvailableRoles(data.map((role: any) => role.name))
+    } catch (error) {
+      console.error("Error fetching roles:", error)
+      toast({
+        title: "Ошибка",
+        description: "Не удалось загрузить список ролей",
+        variant: "destructive",
+      })
+      // Set default roles
+      setAvailableRoles(["admin", "user", "manager", "support"])
+    }
+  }, [toast])
+
+  // Fetch users
+  const fetchUsers = useCallback(async () => {
+    if (!session) return
+
+    try {
+      setIsLoading(true)
+      setFetchError(null)
+
+      const response = await fetch("/api/admin/users")
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      console.log("Fetched users:", data)
+      setUsers(data)
+      setFilteredUsers(data)
+    } catch (error) {
+      console.error("Error fetching users:", error)
+      setFetchError((error as Error).message || "Не удалось загрузить список пользователей")
+      toast({
+        title: "Ошибка",
+        description: (error as Error).message || "Не удалось загрузить список пользователей",
+        variant: "destructive",
+      })
+      // Set empty arrays to prevent undefined errors
+      setUsers([])
+      setFilteredUsers([])
+    } finally {
+      setIsLoading(false)
+      setIsRefreshing(false)
     }
   }, [session, toast])
+
+  // Load data when session is available
+  useEffect(() => {
+    if (session) {
+      fetchUsers()
+      fetchRoles()
+    }
+  }, [session, fetchUsers, fetchRoles])
 
   // Filter users based on search query
   useEffect(() => {
@@ -126,6 +165,12 @@ export default function UsersPage() {
 
     setFilteredUsers(filtered)
   }, [searchQuery, users])
+
+  // Handle refresh users
+  const handleRefreshUsers = () => {
+    setIsRefreshing(true)
+    fetchUsers()
+  }
 
   // Handle create user
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -168,19 +213,17 @@ export default function UsersPage() {
       setCreateDialogOpen(false)
 
       // Refresh users
-      const usersResponse = await fetch("/api/admin/users")
-      const usersData = await usersResponse.json()
-      setUsers(usersData)
+      fetchUsers()
 
       toast({
-        title: "Success",
-        description: "User created successfully",
+        title: "Успех",
+        description: "Пользователь успешно создан",
       })
     } catch (error) {
       console.error("Error creating user:", error)
       toast({
-        title: "Error",
-        description: (error as Error).message || "Failed to create user",
+        title: "Ошибка",
+        description: (error as Error).message || "Не удалось создать пользователя",
         variant: "destructive",
       })
     } finally {
@@ -221,19 +264,17 @@ export default function UsersPage() {
       setEditDialogOpen(false)
 
       // Refresh users
-      const usersResponse = await fetch("/api/admin/users")
-      const usersData = await usersResponse.json()
-      setUsers(usersData)
+      fetchUsers()
 
       toast({
-        title: "Success",
-        description: "User updated successfully",
+        title: "Успех",
+        description: "Пользователь успешно обновлен",
       })
     } catch (error) {
       console.error("Error updating user:", error)
       toast({
-        title: "Error",
-        description: (error as Error).message || "Failed to update user",
+        title: "Ошибка",
+        description: (error as Error).message || "Не удалось обновить пользователя",
         variant: "destructive",
       })
     } finally {
@@ -264,14 +305,14 @@ export default function UsersPage() {
       setUsers(users.filter((user) => user.id !== deleteUserId))
 
       toast({
-        title: "Success",
-        description: "User deleted successfully",
+        title: "Успех",
+        description: "Пользователь успешно удален",
       })
     } catch (error) {
       console.error("Error deleting user:", error)
       toast({
-        title: "Error",
-        description: (error as Error).message || "Failed to delete user",
+        title: "Ошибка",
+        description: (error as Error).message || "Не удалось удалить пользователя",
         variant: "destructive",
       })
     } finally {
@@ -311,14 +352,14 @@ export default function UsersPage() {
       setResetPasswordDialogOpen(false)
 
       toast({
-        title: "Success",
-        description: "Password reset successfully",
+        title: "Успех",
+        description: "Пароль успешно сброшен",
       })
     } catch (error) {
       console.error("Error resetting password:", error)
       toast({
-        title: "Error",
-        description: (error as Error).message || "Failed to reset password",
+        title: "Ошибка",
+        description: (error as Error).message || "Не удалось сбросить пароль",
         variant: "destructive",
       })
     }
@@ -346,17 +387,49 @@ export default function UsersPage() {
       setUsers(users.map((user) => (user.id === userId ? { ...user, enabled: !enabled } : user)))
 
       toast({
-        title: "Success",
-        description: `User ${!enabled ? "enabled" : "disabled"} successfully`,
+        title: "Успех",
+        description: `Пользователь успешно ${!enabled ? "разблокирован" : "заблокирован"}`,
       })
     } catch (error) {
       console.error("Error toggling user status:", error)
       toast({
-        title: "Error",
-        description: (error as Error).message || "Failed to update user status",
+        title: "Ошибка",
+        description: (error as Error).message || "Не удалось изменить статус пользователя",
         variant: "destructive",
       })
     }
+  }
+
+  // Get user role badge color
+  const getRoleBadgeColor = (role: string) => {
+    switch (role) {
+      case "admin":
+        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
+      case "manager":
+        return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
+      case "support":
+        return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300"
+      default:
+        return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
+    }
+  }
+
+  // Show error state if fetch failed
+  if (fetchError && !isLoading && !isRefreshing) {
+    return (
+      <div className="flex flex-col gap-4">
+        <h1 className="text-3xl font-bold tracking-tight">Управление пользователями</h1>
+        <Card className="p-6">
+          <div className="flex flex-col items-center justify-center text-center gap-4">
+            <h2 className="text-xl font-semibold text-destructive">Ошибка загрузки пользователей</h2>
+            <p className="text-muted-foreground">{fetchError}</p>
+            <Button onClick={handleRefreshUsers} disabled={isRefreshing}>
+              {isRefreshing ? "Обновление..." : "Повторить попытку"}
+            </Button>
+          </div>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -381,6 +454,10 @@ export default function UsersPage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
+            <Button variant="outline" onClick={handleRefreshUsers} disabled={isRefreshing}>
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+              <span className="sr-only">Обновить</span>
+            </Button>
             <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
@@ -449,10 +526,11 @@ export default function UsersPage() {
                           <SelectValue placeholder="Выберите роль" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="admin">Администратор</SelectItem>
-                          <SelectItem value="manager">Менеджер</SelectItem>
-                          <SelectItem value="support">Поддержка</SelectItem>
-                          <SelectItem value="user">Пользователь</SelectItem>
+                          {availableRoles.map((role) => (
+                            <SelectItem key={role} value={role}>
+                              {role.charAt(0).toUpperCase() + role.slice(1)}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -474,20 +552,43 @@ export default function UsersPage() {
                 <TableHead>Имя пользователя</TableHead>
                 <TableHead>Имя</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Роли</TableHead>
                 <TableHead>Статус</TableHead>
                 <TableHead className="text-right">Действия</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-4">
-                    Загрузка пользователей...
-                  </TableCell>
-                </TableRow>
+                Array.from({ length: 5 }).map((_, index) => (
+                  <TableRow key={index}>
+                    <TableCell>
+                      <Skeleton className="h-5 w-32" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-5 w-40" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-5 w-48" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-5 w-20" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-5 w-24" />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Skeleton className="h-8 w-8 rounded" />
+                        <Skeleton className="h-8 w-8 rounded" />
+                        <Skeleton className="h-8 w-8 rounded" />
+                        <Skeleton className="h-8 w-8 rounded" />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
               ) : filteredUsers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-4">
+                  <TableCell colSpan={6} className="text-center py-4">
                     {searchQuery ? "Пользователи не найдены" : "Нет доступных пользователей"}
                   </TableCell>
                 </TableRow>
@@ -499,6 +600,19 @@ export default function UsersPage() {
                       {user.firstName} {user.lastName}
                     </TableCell>
                     <TableCell>{user.email}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {user.roles && user.roles.length > 0 ? (
+                          user.roles.map((role) => (
+                            <Badge key={role} className={getRoleBadgeColor(role)}>
+                              {role}
+                            </Badge>
+                          ))
+                        ) : (
+                          <Badge variant="outline">Нет ролей</Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <span
                         className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
@@ -604,10 +718,11 @@ export default function UsersPage() {
                       <SelectValue placeholder="Выберите роль" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="admin">Администратор</SelectItem>
-                      <SelectItem value="manager">Менеджер</SelectItem>
-                      <SelectItem value="support">Поддержка</SelectItem>
-                      <SelectItem value="user">Пользователь</SelectItem>
+                      {availableRoles.map((role) => (
+                        <SelectItem key={role} value={role}>
+                          {role.charAt(0).toUpperCase() + role.slice(1)}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

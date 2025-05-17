@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch"
 import { MessageSquare } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export default function ProfilePage() {
   const { data: session, update: updateSession } = useSession()
@@ -38,6 +39,7 @@ export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false)
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
   // Notification settings
   const [notificationSettings, setNotificationSettings] = useState({
@@ -52,43 +54,52 @@ export default function ProfilePage() {
     },
   })
 
-  // Fetch user profile
-  useEffect(() => {
-    async function fetchProfile() {
-      try {
-        setIsLoadingProfile(true)
-        const response = await fetch("/api/user/profile")
+  // Fetch user profile - using useCallback to prevent infinite loops
+  const fetchProfile = useCallback(async () => {
+    if (!session?.user?.id) {
+      setIsLoadingProfile(false)
+      return
+    }
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch profile")
-        }
+    try {
+      setIsLoadingProfile(true)
+      setFetchError(null)
 
-        const data = await response.json()
-        console.log("Profile data:", data)
+      console.log("Fetching profile data...")
+      const response = await fetch("/api/user/profile")
 
-        setProfile({
-          firstName: data.firstName || "",
-          lastName: data.lastName || "",
-          email: data.email || "",
-          // Correctly map the phone attribute from Keycloak
-          phone: data.attributes?.phone?.[0] || "",
-        })
-      } catch (error) {
-        console.error("Error fetching profile:", error)
-        toast({
-          title: "Ошибка",
-          description: "Не удалось загрузить данные профиля",
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoadingProfile(false)
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`)
       }
-    }
 
-    if (session) {
-      fetchProfile()
+      const data = await response.json()
+      console.log("Profile data received:", data)
+
+      setProfile({
+        firstName: data.firstName || "",
+        lastName: data.lastName || "",
+        email: data.email || "",
+        // Correctly map the phone attribute from Keycloak
+        phone: data.attributes?.phone?.[0] || "",
+      })
+    } catch (error) {
+      console.error("Error fetching profile:", error)
+      setFetchError((error as Error).message || "Не удалось загрузить данные профиля")
+      toast({
+        title: "Ошибка",
+        description: (error as Error).message || "Не удалось загрузить данные профиля",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingProfile(false)
     }
-  }, [session, toast])
+  }, [session?.user?.id, toast])
+
+  // Load profile data when session is available
+  useEffect(() => {
+    fetchProfile()
+  }, [fetchProfile])
 
   // Handle profile update
   const handleProfileUpdate = async (e: React.FormEvent) => {
@@ -222,6 +233,27 @@ export default function ProfilePage() {
     })
   }
 
+  // Retry loading profile data
+  const handleRetry = () => {
+    fetchProfile()
+  }
+
+  // Show error state if fetch failed
+  if (fetchError && !isLoadingProfile) {
+    return (
+      <div className="flex flex-col gap-4">
+        <h1 className="text-3xl font-bold tracking-tight">Профиль пользователя</h1>
+        <Card className="p-6">
+          <div className="flex flex-col items-center justify-center text-center gap-4">
+            <h2 className="text-xl font-semibold text-destructive">Ошибка загрузки профиля</h2>
+            <p className="text-muted-foreground">{fetchError}</p>
+            <Button onClick={handleRetry}>Повторить попытку</Button>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-3xl font-bold tracking-tight">Профиль пользователя</h1>
@@ -244,44 +276,63 @@ export default function ProfilePage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">Имя</Label>
-                    <Input
-                      id="firstName"
-                      value={profile.firstName}
-                      onChange={(e) => setProfile({ ...profile, firstName: e.target.value })}
-                      disabled={isLoadingProfile}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName">Фамилия</Label>
-                    <Input
-                      id="lastName"
-                      value={profile.lastName}
-                      onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
-                      disabled={isLoadingProfile}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={profile.email}
-                      onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                      disabled={isLoadingProfile}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Телефон</Label>
-                    <Input
-                      id="phone"
-                      type="tel"
-                      value={profile.phone}
-                      onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-                      disabled={isLoadingProfile}
-                    />
-                  </div>
+                  {isLoadingProfile ? (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Имя</Label>
+                        <Skeleton className="h-10 w-full" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Фамилия</Label>
+                        <Skeleton className="h-10 w-full" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Email</Label>
+                        <Skeleton className="h-10 w-full" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Телефон</Label>
+                        <Skeleton className="h-10 w-full" />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="firstName">Имя</Label>
+                        <Input
+                          id="firstName"
+                          value={profile.firstName}
+                          onChange={(e) => setProfile({ ...profile, firstName: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="lastName">Фамилия</Label>
+                        <Input
+                          id="lastName"
+                          value={profile.lastName}
+                          onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={profile.email}
+                          onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="phone">Телефон</Label>
+                        <Input
+                          id="phone"
+                          type="tel"
+                          value={profile.phone}
+                          onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
               </CardContent>
               <CardFooter>

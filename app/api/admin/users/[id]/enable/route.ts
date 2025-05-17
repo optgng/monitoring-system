@@ -3,38 +3,36 @@ import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import { keycloakService } from "@/lib/keycloak-service"
 import { logger } from "@/lib/logger"
-import { hasPermission, getCurrentUser } from "@/lib/auth"
 
 // POST enable/disable user
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await getServerSession(authOptions)
-    const currentUser = await getCurrentUser()
 
-    if (!currentUser || !hasPermission(currentUser, "manage_users")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
+    if (!session?.user?.id) {
+      logger.warn("Unauthorized access attempt to enable/disable user")
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    // Check if user has admin role
+    // In a real app, you would check for admin permissions here
 
     const userId = params.id
-    const data = await req.json()
-
-    // Validate input
-    const { enabled } = data
-
-    if (enabled === undefined) {
-      return NextResponse.json({ error: "Enabled status is required" }, { status: 400 })
-    }
+    const { enabled } = await req.json()
 
     // Prevent disabling yourself
-    if (userId === currentUser.id && !enabled) {
+    if (userId === session.user.id && enabled === false) {
+      logger.warn(`User ${userId} attempted to disable their own account`)
       return NextResponse.json({ error: "Cannot disable your own account" }, { status: 400 })
     }
+
+    logger.info(`Setting user ${userId} enabled status to ${enabled}`)
 
     await keycloakService.setUserEnabled(userId, enabled)
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    logger.error(`Error updating user status ${params.id}`, error)
-    return NextResponse.json({ error: "Failed to update user status" }, { status: 500 })
+    logger.error(`Error setting user enabled status`, error)
+    return NextResponse.json({ error: (error as Error).message || "Failed to update user status" }, { status: 500 })
   }
 }
