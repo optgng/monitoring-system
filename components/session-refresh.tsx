@@ -1,7 +1,7 @@
 "use client"
 
 import { useSession } from "next-auth/react"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { logger } from "@/lib/logger"
 import { handleSessionError } from "@/lib/auth-utils"
 
@@ -12,6 +12,8 @@ import { handleSessionError } from "@/lib/auth-utils"
 export function SessionRefresh() {
   const { data: session, status, update } = useSession()
   const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null)
+  const lastRefreshAttempt = useRef<number>(0)
+  const isRefreshing = useRef<boolean>(false)
 
   useEffect(() => {
     // Clear any existing interval when component unmounts or session changes
@@ -37,10 +39,34 @@ export function SessionRefresh() {
 
       // Set up interval to refresh the session
       const interval = setInterval(() => {
+        const now = Date.now()
+
+        // Предотвращаем слишком частые обновления (не чаще чем раз в 5 минут)
+        if (now - lastRefreshAttempt.current < 5 * 60 * 1000) {
+          logger.debug("Skipping session refresh - too soon since last attempt")
+          return
+        }
+
+        // Предотвращаем параллельные обновления
+        if (isRefreshing.current) {
+          logger.debug("Skipping session refresh - already in progress")
+          return
+        }
+
         logger.debug("Refreshing session")
-        update().catch((error) => {
-          logger.error("Failed to refresh session", error)
-        })
+        isRefreshing.current = true
+        lastRefreshAttempt.current = now
+
+        update()
+          .then(() => {
+            logger.debug("Session refreshed successfully")
+          })
+          .catch((error) => {
+            logger.error("Failed to refresh session", error)
+          })
+          .finally(() => {
+            isRefreshing.current = false
+          })
       }, refreshTime)
 
       setRefreshInterval(interval)

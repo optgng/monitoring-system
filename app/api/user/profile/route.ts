@@ -4,6 +4,11 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import { keycloakService } from "@/lib/keycloak-service"
 import { logger } from "@/lib/logger"
 
+// Кэш для хранения данных профиля
+const profileCache = new Map<string, { data: any; timestamp: number }>()
+// Время жизни кэша - 5 минут
+const CACHE_TTL = 5 * 60 * 1000
+
 // GET current user profile
 export async function GET(req: NextRequest) {
   try {
@@ -15,6 +20,17 @@ export async function GET(req: NextRequest) {
     }
 
     const userId = session.user.id
+
+    // Проверяем, есть ли данные в кэше и не устарели ли они
+    const cachedProfile = profileCache.get(userId)
+    const now = Date.now()
+
+    // Если есть кэшированные данные и они не устарели, возвращаем их
+    if (cachedProfile && now - cachedProfile.timestamp < CACHE_TTL) {
+      logger.info(`Returning cached profile for user ${userId}`)
+      return NextResponse.json(cachedProfile.data)
+    }
+
     logger.info(`Fetching profile for user ID: ${userId}`)
 
     // Try to use the session token if available
@@ -32,6 +48,9 @@ export async function GET(req: NextRequest) {
           attributeKeys: safeUserData.attributes ? Object.keys(safeUserData.attributes) : [],
         })
 
+        // Сохраняем данные в кэш
+        profileCache.set(userId, { data: safeUserData, timestamp: now })
+
         return NextResponse.json(safeUserData)
       }
     } catch (error) {
@@ -48,6 +67,9 @@ export async function GET(req: NextRequest) {
       hasAttributes: !!safeUserData.attributes,
       attributeKeys: safeUserData.attributes ? Object.keys(safeUserData.attributes) : [],
     })
+
+    // Сохраняем данные в кэш
+    profileCache.set(userId, { data: safeUserData, timestamp: now })
 
     return NextResponse.json(safeUserData)
   } catch (error) {
@@ -91,6 +113,10 @@ export async function PUT(req: NextRequest) {
         logger.info("Using session access token for profile update")
         await keycloakService.updateUserProfile(userId, updateData, accessToken)
         logger.info(`Successfully updated profile for user ${userId} using session token`)
+
+        // Инвалидируем кэш после обновления
+        profileCache.delete(userId)
+
         return NextResponse.json({ success: true })
       }
     } catch (error) {
@@ -100,6 +126,9 @@ export async function PUT(req: NextRequest) {
     // Second attempt: Use admin token
     await keycloakService.updateUserProfile(userId, updateData)
     logger.info(`Successfully updated profile for user ${userId} using admin token`)
+
+    // Инвалидируем кэш после обновления
+    profileCache.delete(userId)
 
     return NextResponse.json({ success: true })
   } catch (error) {

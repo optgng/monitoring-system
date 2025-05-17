@@ -76,6 +76,16 @@ export const authOptions: NextAuthOptions = {
           token.refreshToken = account.refresh_token
           token.accessTokenExpires = account.expires_at ? account.expires_at * 1000 : 0
           token.tokenType = account.token_type
+
+          // Добавляем метку времени последнего обновления токена
+          token.lastTokenRefresh = Date.now()
+
+          logger.debug("Initial token setup", {
+            expiresAt: new Date(token.accessTokenExpires as number).toISOString(),
+            rolesCount: token.roles.length,
+          })
+
+          return token
         } catch (error) {
           logger.error("Error decoding JWT token", error)
           // Continue with the token we have
@@ -87,7 +97,15 @@ export const authOptions: NextAuthOptions = {
         return token
       }
 
+      // Проверяем, не обновлялся ли токен недавно (в течение последних 10 секунд)
+      // Это предотвращает множественные попытки обновления токена в случае параллельных запросов
+      if (token.lastTokenRefresh && Date.now() - (token.lastTokenRefresh as number) < 10000) {
+        logger.debug("Token refresh skipped - recently refreshed")
+        return token
+      }
+
       // Access token has expired, try to refresh it
+      logger.debug("Token expired, attempting refresh")
       return refreshAccessToken(token)
     },
     async session({ session, token }) {
@@ -105,6 +123,12 @@ export const authOptions: NextAuthOptions = {
         session.user.roles = (token.roles as string[]) || []
         session.user.id = token.sub || ""
         session.error = token.error as string | undefined
+
+        // Добавляем информацию о сроке действия токена, но не передаем сам токен
+        // Это позволит клиенту знать, когда токен истечет, но не иметь доступа к самому токену
+        if (token.accessTokenExpires) {
+          session.expires = new Date(token.accessTokenExpires as number).toISOString()
+        }
       }
       return session
     },
@@ -140,7 +164,13 @@ async function refreshAccessToken(token: JWT) {
       throw new Error("No refresh token available")
     }
 
+    // Устанавливаем метку времени начала обновления токена
+    const refreshStartTime = Date.now()
+    token.lastTokenRefresh = refreshStartTime
+
     const url = `${process.env.KEYCLOAK_ISSUER}/protocol/openid-connect/token`
+
+    logger.debug("Refreshing token", { tokenId: token.jti })
 
     const response = await fetch(url, {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -158,6 +188,12 @@ async function refreshAccessToken(token: JWT) {
     if (!response.ok) {
       logger.error("Error refreshing access token", refreshedTokens)
       throw refreshedTokens
+    }
+
+    // Проверяем, не было ли другого успешного обновления токена пока мы ждали
+    if (token.lastTokenRefresh !== refreshStartTime) {
+      logger.debug("Another refresh completed while this was in progress, using that token instead")
+      return token
     }
 
     logger.debug("Token refreshed successfully", { expires_in: refreshedTokens.expires_in })
@@ -180,6 +216,7 @@ async function refreshAccessToken(token: JWT) {
       refreshToken: refreshedTokens.refresh_token ?? token.refreshToken,
       accessTokenExpires: Date.now() + refreshedTokens.expires_in * 1000,
       roles: roles,
+      lastTokenRefresh: Date.now(),
     }
   } catch (error) {
     logger.error("Error refreshing access token", error)
