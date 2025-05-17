@@ -1,36 +1,38 @@
 import type React from "react"
-import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
-import { SessionProvider } from "@/components/providers/session-provider"
-import { ClientProviders } from "@/components/providers/client-providers"
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import ClientProviders from "@/components/providers/client-providers"
+import { SessionRefresh } from "@/components/session-refresh"
+import { SessionExpiredModal } from "@/components/session-expired-modal"
+import AuthLayout from "@/components/auth-layout"
 import { Toaster } from "@/components/ui/toaster"
 
 const inter = Inter({ subsets: ["latin", "cyrillic"] })
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "Система мониторинга",
-  description: "Система мониторинга серверов и сервисов",
+  description: "Система мониторинга сервисов и устройств",
     generator: 'v0.dev'
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode
-}>) {
+}) {
+  const session = await getServerSession(authOptions)
+
   return (
     <html lang="ru" suppressHydrationWarning>
-      <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <SessionProvider>
-            <ClientProviders>
-              {children}
-              <Toaster />
-            </ClientProviders>
-          </SessionProvider>
-        </ThemeProvider>
+      <body className={`${inter.className} antialiased`}>
+        <ClientProviders session={session}>
+          <SessionRefresh />
+          <SessionExpiredModal />
+          <AuthLayout>{children}</AuthLayout>
+          <Toaster />
+        </ClientProviders>
       </body>
     </html>
   )
