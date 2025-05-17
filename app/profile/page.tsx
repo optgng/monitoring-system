@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,13 +14,26 @@ import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 import { Skeleton } from "@/components/ui/skeleton"
 
+// Тип для данных профиля
+interface ProfileData {
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+}
+
 export default function ProfilePage() {
-  const { data: session, update: updateSession, status } = useSession()
+  // Используем useRef для отслеживания монтирования компонента
+  const isMounted = useRef(false)
+  const fetchStarted = useRef(false)
+  const abortController = useRef<AbortController | null>(null)
+
+  const { data: session, status } = useSession()
   const { toast } = useToast()
   const router = useRouter()
 
   // Profile state
-  const [profile, setProfile] = useState({
+  const [profile, setProfile] = useState<ProfileData>({
     firstName: "",
     lastName: "",
     email: "",
@@ -37,14 +49,9 @@ export default function ProfilePage() {
 
   // Loading states
   const [isLoading, setIsLoading] = useState(false)
-  const [isLoadingProfile, setIsLoadingProfile] = useState(false)
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true)
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
-
-  // Refs для отслеживания состояния запросов
-  const fetchedRef = useRef<boolean>(false)
-  const abortControllerRef = useRef<AbortController | null>(null)
-  const profileRequestTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Notification settings
   const [notificationSettings, setNotificationSettings] = useState({
@@ -59,15 +66,25 @@ export default function ProfilePage() {
     },
   })
 
-  // Fetch user profile
-  const fetchProfile = async () => {
-    // Если уже идет загрузка, отменяем предыдущий запрос
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-    }
+  // Функция для загрузки профиля - определена вне useEffect
+  async function loadProfile() {
+    // Если загрузка уже началась, не запускаем повторно
+    if (fetchStarted.current) return
 
-    // Создаем новый контроллер для возможности отмены запроса
-    abortControllerRef.current = new AbortController()
+    // Если компонент размонтирован, не продолжаем
+    if (!isMounted.current) return
+
+    // Если нет сессии, не продолжаем
+    if (status !== "authenticated") return
+
+    // Устанавливаем флаг начала загрузки
+    fetchStarted.current = true
+
+    // Создаем новый AbortController для возможности отмены запроса
+    if (abortController.current) {
+      abortController.current.abort()
+    }
+    abortController.current = new AbortController()
 
     try {
       setIsLoadingProfile(true)
@@ -75,29 +92,16 @@ export default function ProfilePage() {
 
       console.log("Fetching profile data...")
 
-      // Устанавливаем таймаут для запроса (10 секунд)
-      const timeoutId = setTimeout(() => {
-        if (abortControllerRef.current) {
-          abortControllerRef.current.abort()
-        }
-        throw new Error("Превышено время ожидания запроса")
-      }, 10000)
-
-      profileRequestTimeoutRef.current = timeoutId
-
-      const response = await fetch("/api/user/profile", {
-        signal: abortControllerRef.current.signal,
-        // Добавляем случайный параметр для предотвращения кэширования
+      // Добавляем случайный параметр для предотвращения кэширования
+      const timestamp = Date.now()
+      const response = await fetch(`/api/user/profile?_=${timestamp}`, {
+        signal: abortController.current.signal,
         headers: {
           "Cache-Control": "no-cache, no-store, must-revalidate",
           Pragma: "no-cache",
           Expires: "0",
         },
       })
-
-      // Очищаем таймаут, так как запрос завершился
-      clearTimeout(timeoutId)
-      profileRequestTimeoutRef.current = null
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
@@ -107,22 +111,24 @@ export default function ProfilePage() {
       const data = await response.json()
       console.log("Profile data received:", data)
 
+      // Проверяем, что компонент все еще смонтирован
+      if (!isMounted.current) return
+
       setProfile({
         firstName: data.firstName || "",
         lastName: data.lastName || "",
         email: data.email || "",
-        // Correctly map the phone attribute from Keycloak
         phone: data.attributes?.phone?.[0] || "",
       })
-
-      // Отмечаем, что данные успешно загружены
-      fetchedRef.current = true
     } catch (error) {
       // Игнорируем ошибки отмены запроса
       if ((error as Error).name === "AbortError") {
         console.log("Fetch aborted")
         return
       }
+
+      // Проверяем, что компонент все еще смонтирован
+      if (!isMounted.current) return
 
       console.error("Error fetching profile:", error)
       setFetchError((error as Error).message || "Не удалось загрузить данные профиля")
@@ -132,37 +138,37 @@ export default function ProfilePage() {
         variant: "destructive",
       })
     } finally {
-      setIsLoadingProfile(false)
-      abortControllerRef.current = null
+      // Проверяем, что компонент все еще смонтирован
+      if (isMounted.current) {
+        setIsLoadingProfile(false)
+      }
     }
   }
 
-  // Load profile data when session is available
+  // Эффект для отслеживания монтирования/размонтирования компонента
   useEffect(() => {
-    // Очищаем таймауты и запросы при размонтировании компонента
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-      }
+    isMounted.current = true
 
-      if (profileRequestTimeoutRef.current) {
-        clearTimeout(profileRequestTimeoutRef.current)
+    return () => {
+      isMounted.current = false
+      if (abortController.current) {
+        abortController.current.abort()
       }
     }
   }, [])
 
-  // Эффект для загрузки данных профиля
+  // Отдельный эффект только для загрузки данных при изменении статуса аутентификации
   useEffect(() => {
-    // Проверяем, что сессия аутентифицирована и запрос еще не был выполнен
-    if (status === "authenticated" && !fetchedRef.current && !isLoadingProfile) {
-      fetchProfile()
+    // Загружаем данные только при первой аутентификации
+    if (status === "authenticated" && !fetchStarted.current) {
+      loadProfile()
     }
 
-    // Сбрасываем флаг, если пользователь вышел из системы
+    // Если пользователь не аутентифицирован, перенаправляем на страницу входа
     if (status === "unauthenticated") {
-      fetchedRef.current = false
+      router.push("/login")
     }
-  }, [status, isLoadingProfile])
+  }, [status, router])
 
   // Handle profile update
   const handleProfileUpdate = async (e: React.FormEvent) => {
@@ -190,19 +196,6 @@ export default function ProfilePage() {
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || "Failed to update profile")
       }
-
-      // Update the session to reflect the changes
-      await updateSession({
-        ...session,
-        user: {
-          ...session?.user,
-          name: `${profile.firstName} ${profile.lastName}`,
-          email: profile.email,
-        },
-      })
-
-      // Force a refresh to update the header
-      router.refresh()
 
       toast({
         title: "Успех",
@@ -298,8 +291,8 @@ export default function ProfilePage() {
 
   // Retry loading profile data
   const handleRetry = () => {
-    fetchedRef.current = false // Сбрасываем флаг, чтобы разрешить повторную загрузку
-    fetchProfile()
+    fetchStarted.current = false
+    loadProfile()
   }
 
   // Показываем состояние загрузки сессии
@@ -319,8 +312,7 @@ export default function ProfilePage() {
 
   // Показываем ошибку, если пользователь не авторизован
   if (status === "unauthenticated") {
-    router.push("/login")
-    return null
+    return null // router.push уже выполняется в useEffect
   }
 
   // Show error state if fetch failed

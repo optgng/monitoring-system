@@ -15,6 +15,9 @@ export function SessionRefresh() {
   const lastRefreshAttempt = useRef<number>(0)
   const isRefreshing = useRef<boolean>(false)
 
+  // Флаг для отключения автоматического обновления на странице профиля
+  const isProfilePage = typeof window !== "undefined" && window.location.pathname.includes("/profile")
+
   useEffect(() => {
     // Clear any existing interval when component unmounts or session changes
     return () => {
@@ -31,6 +34,16 @@ export function SessionRefresh() {
       return
     }
 
+    // Отключаем автоматическое обновление на странице профиля
+    if (isProfilePage) {
+      logger.debug("Session refresh disabled on profile page")
+      if (refreshInterval) {
+        clearInterval(refreshInterval)
+        setRefreshInterval(null)
+      }
+      return
+    }
+
     // Only set up refresh for authenticated sessions
     if (status === "authenticated" && session) {
       // Calculate when to refresh (75% of the way through the session)
@@ -41,8 +54,8 @@ export function SessionRefresh() {
       const interval = setInterval(() => {
         const now = Date.now()
 
-        // Предотвращаем слишком частые обновления (не чаще чем раз в 5 минут)
-        if (now - lastRefreshAttempt.current < 5 * 60 * 1000) {
+        // Предотвращаем слишком частые обновления (не чаще чем раз в 30 минут)
+        if (now - lastRefreshAttempt.current < 30 * 60 * 1000) {
           logger.debug("Skipping session refresh - too soon since last attempt")
           return
         }
@@ -73,7 +86,7 @@ export function SessionRefresh() {
 
       logger.debug("Session refresh interval set", { refreshTime })
     }
-  }, [session, status, update])
+  }, [session, status, update, isProfilePage])
 
   // This component doesn't render anything
   return null
