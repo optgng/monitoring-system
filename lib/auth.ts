@@ -52,11 +52,10 @@ export function hasPermission(user: User | null, permission: string): boolean {
       "manage_users",
       "manage_devices",
       "manage_notifications",
-      "generate_reports",
-      "view_logs",
+      "generate_reports"
     ],
     manager: ["view_dashboards", "generate_reports"],
-    support: ["view_dashboards", "view_logs"],
+    support: ["view_dashboards"],
     user: ["view_dashboards"],
   }
 

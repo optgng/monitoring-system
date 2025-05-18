@@ -102,24 +102,6 @@ export default function Sidebar({ className }: SidebarProps) {
                 </Button>
               </>
             </RoleBasedUI>
-
-            {/* Логи - доступны для специалистов технической поддержки и администраторов */}
-            <RoleBasedUI
-              requiredRoles={["support", "admin"]}
-              loadingComponent={<Skeleton className="h-9 w-full rounded-md" />}
-            >
-              <Button
-                variant={pathname === "/logs" ? "secondary" : "ghost"}
-                size="sm"
-                className="w-full justify-start"
-                asChild
-              >
-                <Link href="/logs">
-                  <FileSearch className="mr-2 h-4 w-4" />
-                  Логи
-                </Link>
-              </Button>
-            </RoleBasedUI>
           </div>
         </div>
 

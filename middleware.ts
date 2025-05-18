@@ -10,7 +10,6 @@ const protectedRoutes = [
   { path: "/notifications", roles: ["admin"] },
   { path: "/reports", roles: ["manager", "admin"] },
   { path: "/alerts", roles: ["admin"] },
-  { path: "/logs", roles: ["support", "admin"] },
 ]
 
 // Define public routes that don't require authentication
