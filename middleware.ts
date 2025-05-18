@@ -19,6 +19,8 @@ const publicRoutes = ["/login", "/auth", "/api/auth"]
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
+  console.log(`Middleware triggered for path: ${pathname}`) // Логирование маршрута
+
   // Check if the route is public
   if (publicRoutes.some((route) => pathname.startsWith(route))) {
     return NextResponse.next()

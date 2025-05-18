@@ -19,7 +19,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const userId = params.id
     const user = await keycloakService.getUserById(userId)
 
-    return NextResponse.json(user)
+    // Преобразуем phoneNumber из attributes в отдельное поле для удобства фронта
+    let phone = ""
+    if (user.attributes && user.attributes.phoneNumber && Array.isArray(user.attributes.phoneNumber)) {
+      phone = user.attributes.phoneNumber[0]
+    }
+
+    return NextResponse.json({ ...user, phone })
   } catch (error) {
     logger.error(`Error fetching user ${params.id}`, error)
     return NextResponse.json({ error: "Failed to fetch user" }, { status: 500 })
@@ -42,9 +48,20 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const data = await req.json()
 
     // Validate input
-    const { firstName, lastName, email, enabled, roles } = data
+    const { firstName, lastName, email, enabled, roles, attributes } = data
 
-    logger.info(`Updating user ${userId}`, { firstName, lastName, email, enabled, roles })
+    logger.info(`Updating user ${userId}`, { firstName, lastName, email, enabled, roles, attributes })
+
+    // Формируем объект атрибутов для Keycloak
+    let kcAttributes: Record<string, string[]> | undefined = undefined
+    if (attributes && typeof attributes === "object") {
+      kcAttributes = {}
+      for (const key in attributes) {
+        kcAttributes[key] = Array.isArray(attributes[key])
+          ? attributes[key]
+          : [attributes[key]]
+      }
+    }
 
     // Update user profile
     await keycloakService.updateUserProfile(userId, {
@@ -52,7 +69,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       lastName,
       email,
       enabled,
-      emailVerified: true, // Всегда устанавливаем emailVerified в true
+      emailVerified: true,
+      attributes: kcAttributes,
     })
 
     // Update roles if provided

@@ -203,7 +203,12 @@ export class KeycloakService {
       if (!response.ok) {
         let errorData: KeycloakError
         try {
-          errorData = await response.json()
+          // Попытка распарсить JSON, если есть тело
+          const text = await response.text()
+          errorData = text ? JSON.parse(text) : {
+            error: `HTTP Error ${response.status}`,
+            error_description: response.statusText,
+          }
         } catch (e) {
           errorData = {
             error: `HTTP Error ${response.status}`,
@@ -224,8 +229,10 @@ export class KeycloakService {
         return {} as T
       }
 
-      // Parse JSON response
-      return await response.json()
+      // Безопасный парсинг JSON-ответа (если тело пустое, вернуть {})
+      const text = await response.text()
+      if (!text) return {} as T
+      return JSON.parse(text)
     } catch (error) {
       logger.error(`Error in Keycloak API request to ${endpoint}`, error)
       throw error

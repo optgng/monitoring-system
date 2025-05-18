@@ -25,7 +25,7 @@ export default async function ProfilePage() {
       firstName: userData.firstName || "",
       lastName: userData.lastName || "",
       email: userData.email || "",
-      phone: userData.attributes?.phone?.[0] || "",
+      phone: userData.attributes?.phoneNumber?.[0] || userData.attributes?.phone?.[0] || "",
     }
 
     // Передаем данные в клиентский компонент
@@ -186,7 +186,7 @@ export default async function ProfilePage() {
 //     }
 //   }
 
-//   // Эффект для отслеживания монтирования/размонтирования компонента
+//   // Эффект для отслеживания монтирования/размонтения компонента
 //   useEffect(() => {
 //     isMounted.current = true
 

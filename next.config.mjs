@@ -12,6 +12,11 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  experimental: {
+    images: {
+      allowFutureImage: true,
+    },
+  },
   // Add any other Next.js configuration options here
 }
 

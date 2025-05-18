@@ -80,6 +80,10 @@ export async function PUT(req: NextRequest) {
     // Validate input
     const { firstName, lastName, email, attributes } = data
 
+    if (!firstName || !lastName || !email) {
+      return NextResponse.json({ error: "Invalid input data" }, { status: 400 })
+    }
+
     logger.info(`Updating profile for user ID: ${userId}`, { firstName, lastName, email, attributes })
 
     // Create update object with only allowed fields

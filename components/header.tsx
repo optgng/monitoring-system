@@ -20,6 +20,35 @@ import { useRouter, usePathname } from "next/navigation"
 import { signOutWithErrorHandling } from "@/lib/auth-utils"
 import { logger } from "@/lib/logger"
 
+// Удаление cookie по имени (универсально для всех путей и доменов)
+function deleteCookie(name: string) {
+  if (typeof document === "undefined") return
+  document.cookie = `${name}=; Max-Age=0; path=/;`
+  document.cookie = `${name}=; Max-Age=0; path=/; domain=${window.location.hostname};`
+}
+
+// Очистка всех next-auth cookies и кэша
+const clearLocalAuthData = () => {
+  try {
+    if (typeof window !== "undefined") {
+      localStorage.clear()
+      sessionStorage.clear()
+      // Удаляем все основные next-auth cookies
+      deleteCookie("next-auth.csrf-token")
+      deleteCookie("next-auth.session-token")
+      deleteCookie("next-auth.callback-url")
+      deleteCookie("next-auth.state")
+      deleteCookie("next-auth.pkce.code_verifier")
+      deleteCookie("next-auth.pkce.state")
+    }
+    if (window && (window as any).profileCache) {
+      (window as any).profileCache.clear()
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
 export default function Header() {
   const [notifications, setNotifications] = useState(3)
   const { data: session, status, update } = useSession()
@@ -34,26 +63,43 @@ export default function Header() {
     }
   }, [session])
 
-  // Force refresh session when returning to profile page
-  useEffect(() => {
-    const refreshSession = async () => {
-      if (pathname === "/profile") {
-        await update()
-      }
-    }
-
-    refreshSession()
-  }, [pathname, update])
-
   const handleSignOut = async () => {
     try {
       setIsSigningOut(true)
+      // Сначала signOutWithErrorHandling для сброса next-auth сессии на сервере
       await signOutWithErrorHandling({ redirect: false })
-      router.push("/login")
+      clearLocalAuthData()
+      // Формируем корректный logout-URL для Keycloak:
+      // http://{KEYCLOAK_HOST}/auth/realms/{KEYCLOAK_REALM}/protocol/openid-connect/logout?redirect_uri={ENCODED_REDIRECT_URI}
+      let keycloakHost = process.env.NEXT_PUBLIC_KEYCLOAK_HOST || process.env.KEYCLOAK_HOST
+      let realm = process.env.NEXT_PUBLIC_KEYCLOAK_REALM || process.env.KEYCLOAK_REALM
+      // Если переменные не заданы, пробуем взять из issuer
+      let issuer = process.env.NEXT_PUBLIC_KEYCLOAK_ISSUER || process.env.KEYCLOAK_ISSUER
+      if ((!keycloakHost || !realm) && issuer) {
+        // issuer: http://keycloak.localhost:8080/realms/monitoring
+        const match = issuer.match(/(https?:\/\/[^/]+)\/realms\/([^/]+)/)
+        if (match) {
+          keycloakHost = match[1].replace(/\/$/, "")
+          realm = match[2]
+        }
+      }
+      const postLogoutRedirectUri = `${window.location.origin}/login`
+      if (keycloakHost && realm) {
+        // Убедимся, что host оканчивается на /auth, если это Keycloak 21+
+        let hostWithAuth = keycloakHost
+        if (!/\/auth$/.test(hostWithAuth)) {
+          hostWithAuth = hostWithAuth.replace(/\/$/, "") + "/auth"
+        }
+        const logoutUrl = `${hostWithAuth}/realms/${realm}/protocol/openid-connect/logout?redirect_uri=${encodeURIComponent(postLogoutRedirectUri)}`
+        window.location.href = logoutUrl
+        return
+      }
+      // Fallback: просто редирект
+      window.location.href = "/login"
     } catch (error) {
       logger.error("Error during sign out", error)
-      // Fallback redirect
-      router.push("/login")
+      clearLocalAuthData()
+      window.location.href = "/login"
     } finally {
       setIsSigningOut(false)
     }

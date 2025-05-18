@@ -18,7 +18,7 @@ export function SessionRefresh() {
 
   // Получаем текущий путь для проверки, находимся ли мы на странице профиля
   const pathname = usePathname()
-  const isProfilePage = pathname?.includes("/profile")
+  const isProfilePage = pathname === "/profile"
 
   useEffect(() => {
     // Clear any existing interval when component unmounts or session changes

@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     const data = await req.json()
 
     // Validate input
-    const { username, firstName, lastName, email, password, roles } = data
+    const { username, firstName, lastName, email, password, roles, attributes } = data
 
     if (!username || !email || !password) {
       return NextResponse.json({ error: "Username, email, and password are required" }, { status: 400 })
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     logger.info("Creating new user", { username, email })
 
     // Create user
-    const userData = {
+    const userData: any = {
       username,
       firstName,
       lastName,
@@ -88,6 +88,17 @@ export async function POST(req: NextRequest) {
           temporary: false,
         },
       ],
+    }
+
+    // Добавляем атрибуты, если они есть (например, phoneNumber)
+    if (attributes && typeof attributes === "object") {
+      userData.attributes = {}
+      for (const key in attributes) {
+        // Keycloak ожидает массив строк для каждого атрибута
+        userData.attributes[key] = Array.isArray(attributes[key])
+          ? attributes[key]
+          : [attributes[key]]
+      }
     }
 
     const userId = await keycloakService.createUser(userData)

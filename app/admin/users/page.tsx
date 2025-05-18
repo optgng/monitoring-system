@@ -25,6 +25,7 @@ import { PlusCircle, Search, Edit, Lock, UserCheck, UserX, RefreshCw, Loader2 } 
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { useRouter } from "next/navigation"
+import { Modal } from "@/components/ui/modal"
 
 // Define user type
 interface User {
@@ -37,6 +38,7 @@ interface User {
   emailVerified: boolean
   createdTimestamp?: number
   roles?: string[]
+  phone?: string // Добавлено поле phone
 }
 
 // Определяем доступные роли
@@ -73,6 +75,7 @@ export default function UsersPage() {
     email: "",
     password: "",
     role: "user",
+    phone: "", // Добавлено поле phone
   })
 
   const [editUser, setEditUser] = useState<User | null>(null)
@@ -80,6 +83,14 @@ export default function UsersPage() {
   const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null)
   const [newPassword, setNewPassword] = useState("")
   const [temporaryPassword, setTemporaryPassword] = useState(true)
+
+  // Состояния ошибок для форм
+  const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({})
+  const [showResultModal, setShowResultModal] = useState(false)
+  const [resultModalContent, setResultModalContent] = useState<{ title: string; description: string }>({
+    title: "",
+    description: "",
+  })
 
   // Fetch users
   const fetchUsers = useCallback(async () => {
@@ -155,14 +166,54 @@ export default function UsersPage() {
     fetchUsers()
   }
 
+  // Простая валидация email и телефона
+  const validateUserForm = (user: typeof newUser) => {
+    const errors: { [key: string]: string } = {}
+    if (!user.username.trim()) errors.username = "Имя пользователя обязательно"
+    if (!user.firstName.trim()) errors.firstName = "Имя обязательно"
+    if (!user.lastName.trim()) errors.lastName = "Фамилия обязательна"
+    if (!user.email.match(/^[\w-.]+@([\w-]+\.)+[\w-]{2,}$/)) errors.email = "Некорректный email"
+    if (user.phone && !user.phone.match(/^\+?\d{7,15}$/)) errors.phone = "Некорректный телефон"
+    if (!user.password && !editDialogOpen) errors.password = "Пароль обязателен"
+    return errors
+  }
+
+  // Функция для парсинга ошибок Keycloak
+  function parseKeycloakError(errorData: any): string {
+    if (!errorData) return "Неизвестная ошибка"
+    if (typeof errorData === "string") return errorData
+    if (errorData.errorMessage) {
+      // Частые ошибки Keycloak
+      if (errorData.errorMessage === "User exists with same email") {
+        return "Пользователь с таким email уже существует."
+      }
+      if (errorData.errorMessage === "User exists with same username") {
+        return "Пользователь с таким именем уже существует."
+      }
+      if (errorData.errorMessage === "error-user-attribute-required" && errorData.params?.[0]) {
+        return `Поле "${errorData.params[0]}" обязательно для заполнения.`
+      }
+      return errorData.errorMessage
+    }
+    if (errorData.field && errorData.errorMessage) {
+      return `Ошибка поля "${errorData.field}": ${errorData.errorMessage}`
+    }
+    if (errorData.error_description) return errorData.error_description
+    if (errorData.error) return errorData.error
+    return "Неизвестная ошибка"
+  }
+
   // Handle create user
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault()
-
+    setFormErrors({})
+    const errors = validateUserForm(newUser)
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors)
+      return
+    }
     try {
       setIsCreatingUser(true)
-
-      // Проверяем, что роль выбрана из доступных
       const role = AVAILABLE_ROLES.includes(newUser.role) ? newUser.role : AVAILABLE_ROLES[0]
 
       const response = await fetch("/api/admin/users", {
@@ -177,15 +228,20 @@ export default function UsersPage() {
           email: newUser.email,
           password: newUser.password,
           roles: [role],
+          attributes: {
+            phoneNumber: newUser.phone,
+          },
         }),
       })
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))
-        throw new Error(data.error || "Failed to create user")
+        const errorMsg = parseKeycloakError(data)
+        setResultModalContent({ title: "Ошибка", description: errorMsg })
+        setShowResultModal(true)
+        return
       }
 
-      // Reset form
       setNewUser({
         username: "",
         firstName: "",
@@ -193,26 +249,13 @@ export default function UsersPage() {
         email: "",
         password: "",
         role: "user",
+        phone: "",
       })
 
-      // Close dialog
+      setResultModalContent({ title: "Успех", description: "Пользователь успешно создан" })
+      setShowResultModal(true)
       setCreateDialogOpen(false)
-
-      // Refresh users
       fetchUsers()
-
-      // Показываем уведомление об успехе
-      toast({
-        title: "Успех",
-        description: "Пользователь успешно создан",
-      })
-    } catch (error) {
-      console.error("Error creating user:", error)
-      toast({
-        title: "Ошибка",
-        description: (error as Error).message || "Не удалось создать пользователя",
-        variant: "destructive",
-      })
     } finally {
       setIsCreatingUser(false)
     }
@@ -221,13 +264,20 @@ export default function UsersPage() {
   // Handle edit user
   const handleEditUser = async (e: React.FormEvent) => {
     e.preventDefault()
+    setFormErrors({})
+    if (!editUser) {
+      setResultModalContent({ title: "Ошибка", description: "Пользователь не выбран" })
+      setShowResultModal(true)
+      return
+    }
 
-    if (!editUser) return
-
+    const errors = validateUserForm({ ...editUser, password: "" })
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors)
+      return
+    }
     try {
       setIsUpdatingUser(true)
-
-      // Проверяем, что роль выбрана из доступных
       const role = AVAILABLE_ROLES.includes(editUserRole) ? editUserRole : AVAILABLE_ROLES[0]
 
       const response = await fetch(`/api/admin/users/${editUser.id}`, {
@@ -241,32 +291,24 @@ export default function UsersPage() {
           email: editUser.email,
           enabled: editUser.enabled,
           roles: [role],
+          attributes: {
+            phoneNumber: editUser.phone,
+          },
         }),
       })
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))
-        throw new Error(data.error || "Failed to update user")
+        const errorMsg = parseKeycloakError(data)
+        setResultModalContent({ title: "Ошибка", description: errorMsg })
+        setShowResultModal(true)
+        return
       }
 
-      // Close dialog
+      setResultModalContent({ title: "Успех", description: "Пользователь успешно обновлен" })
+      setShowResultModal(true)
       setEditDialogOpen(false)
-
-      // Refresh users
       fetchUsers()
-
-      // Показываем уведомление об успехе
-      toast({
-        title: "Успех",
-        description: "Пользователь успешно обновлен",
-      })
-    } catch (error) {
-      console.error("Error updating user:", error)
-      toast({
-        title: "Ошибка",
-        description: (error as Error).message || "Не удалось обновить пользователя",
-        variant: "destructive",
-      })
     } finally {
       setIsUpdatingUser(false)
     }
@@ -292,6 +334,11 @@ export default function UsersPage() {
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))
+        toast({
+          title: "Ошибка",
+          description: data.error || "Не удалось сбросить пароль",
+          variant: "destructive",
+        })
         throw new Error(data.error || "Failed to reset password")
       }
 
@@ -307,12 +354,7 @@ export default function UsersPage() {
         description: "Пароль успешно сброшен",
       })
     } catch (error) {
-      console.error("Error resetting password:", error)
-      toast({
-        title: "Ошибка",
-        description: (error as Error).message || "Не удалось сбросить пароль",
-        variant: "destructive",
-      })
+      // toast уже вызван выше, здесь можно не дублировать
     }
   }
 
@@ -330,24 +372,19 @@ export default function UsersPage() {
       })
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data.error || "Failed to update user status")
+        setResultModalContent({ title: "Ошибка", description: "Не удалось изменить статус пользователя" })
+        setShowResultModal(true)
+        return
       }
 
       // Update users list
       setUsers(users.map((user) => (user.id === userId ? { ...user, enabled: !enabled } : user)))
 
-      toast({
-        title: "Успех",
-        description: `Пользователь успешно ${!enabled ? "разблокирован" : "заблокирован"}`,
-      })
+      setResultModalContent({ title: "Успех", description: `Пользователь успешно ${!enabled ? "разблокирован" : "заблокирован"}` })
+      setShowResultModal(true)
     } catch (error) {
-      console.error("Error toggling user status:", error)
-      toast({
-        title: "Ошибка",
-        description: (error as Error).message || "Не удалось изменить статус пользователя",
-        variant: "destructive",
-      })
+      setResultModalContent({ title: "Ошибка", description: "Не удалось изменить статус пользователя" })
+      setShowResultModal(true)
     }
   }
 
@@ -404,6 +441,16 @@ export default function UsersPage() {
     )
   }
 
+  // Добавить функцию для открытия диалога редактирования пользователя
+  const handleEditDialogOpen = (user: User) => {
+    setEditUser({
+      ...user,
+      phone: user.phone || user.attributes?.phoneNumber?.[0] || user.attributes?.phone?.[0] || "",
+    })
+    setEditUserRole(user.roles?.[0] || "user")
+    setEditDialogOpen(true)
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-3xl font-bold tracking-tight">Управление пользователями</h1>
@@ -449,47 +496,73 @@ export default function UsersPage() {
                         <Label htmlFor="firstName">Имя</Label>
                         <Input
                           id="firstName"
+                          placeholder="Введите имя"
                           value={newUser.firstName}
                           onChange={(e) => setNewUser({ ...newUser, firstName: e.target.value })}
+                          className={formErrors.firstName ? "border-red-500" : ""}
                         />
+                        {formErrors.firstName && <span className="text-xs text-red-500">{formErrors.firstName}</span>}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="lastName">Фамилия</Label>
                         <Input
                           id="lastName"
+                          placeholder="Введите фамилию"
                           value={newUser.lastName}
                           onChange={(e) => setNewUser({ ...newUser, lastName: e.target.value })}
+                          className={formErrors.lastName ? "border-red-500" : ""}
                         />
+                        {formErrors.lastName && <span className="text-xs text-red-500">{formErrors.lastName}</span>}
                       </div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="username">Имя пользователя</Label>
                       <Input
                         id="username"
+                        placeholder="Введите имя пользователя"
                         value={newUser.username}
                         onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
                         required
+                        className={formErrors.username ? "border-red-500" : ""}
                       />
+                      {formErrors.username && <span className="text-xs text-red-500">{formErrors.username}</span>}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="email">Email</Label>
                       <Input
                         id="email"
                         type="email"
+                        placeholder="Введите email"
                         value={newUser.email}
                         onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
                         required
+                        className={formErrors.email ? "border-red-500" : ""}
                       />
+                      {formErrors.email && <span className="text-xs text-red-500">{formErrors.email}</span>}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="password">Пароль</Label>
                       <Input
                         id="password"
                         type="password"
+                        placeholder="Введите пароль"
                         value={newUser.password}
                         onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
                         required
+                        className={formErrors.password ? "border-red-500" : ""}
                       />
+                      {formErrors.password && <span className="text-xs text-red-500">{formErrors.password}</span>}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Телефон</Label>
+                      <Input
+                        id="phone"
+                        placeholder="Введите телефон"
+                        value={newUser.phone}
+                        onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
+                        className={formErrors.phone ? "border-red-500" : ""}
+                      />
+                      {formErrors.phone && <span className="text-xs text-red-500">{formErrors.phone}</span>}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="role">Роль</Label>
@@ -524,6 +597,7 @@ export default function UsersPage() {
                 <TableHead>Имя пользователя</TableHead>
                 <TableHead>Имя</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Телефон</TableHead>
                 <TableHead>Роли</TableHead>
                 <TableHead>Статус</TableHead>
                 <TableHead className="text-right">Действия</TableHead>
@@ -571,6 +645,7 @@ export default function UsersPage() {
                       {user.firstName} {user.lastName}
                     </TableCell>
                     <TableCell>{user.email}</TableCell>
+                    <TableCell>{user.phone || ""}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {user.roles && user.roles.length > 0 ? (
@@ -586,11 +661,10 @@ export default function UsersPage() {
                     </TableCell>
                     <TableCell>
                       <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          user.enabled
-                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
-                            : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
-                        }`}
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${user.enabled
+                          ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
+                          : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
+                          }`}
                       >
                         {user.enabled ? "Активен" : "Заблокирован"}
                       </span>
@@ -600,11 +674,7 @@ export default function UsersPage() {
                         <Button
                           variant="outline"
                           size="icon"
-                          onClick={() => {
-                            setEditUser(user)
-                            setEditUserRole(user.roles?.[0] || "user")
-                            setEditDialogOpen(true)
-                          }}
+                          onClick={() => handleEditDialogOpen(user)}
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -650,17 +720,23 @@ export default function UsersPage() {
                     <Label htmlFor="edit-firstName">Имя</Label>
                     <Input
                       id="edit-firstName"
+                      placeholder="Введите имя"
                       value={editUser.firstName || ""}
                       onChange={(e) => setEditUser({ ...editUser, firstName: e.target.value })}
+                      className={formErrors.firstName ? "border-red-500" : ""}
                     />
+                    {formErrors.firstName && <span className="text-xs text-red-500">{formErrors.firstName}</span>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="edit-lastName">Фамилия</Label>
                     <Input
                       id="edit-lastName"
+                      placeholder="Введите фамилию"
                       value={editUser.lastName || ""}
                       onChange={(e) => setEditUser({ ...editUser, lastName: e.target.value })}
+                      className={formErrors.lastName ? "border-red-500" : ""}
                     />
+                    {formErrors.lastName && <span className="text-xs text-red-500">{formErrors.lastName}</span>}
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -668,9 +744,23 @@ export default function UsersPage() {
                   <Input
                     id="edit-email"
                     type="email"
+                    placeholder="Введите email"
                     value={editUser.email || ""}
                     onChange={(e) => setEditUser({ ...editUser, email: e.target.value })}
+                    className={formErrors.email ? "border-red-500" : ""}
                   />
+                  {formErrors.email && <span className="text-xs text-red-500">{formErrors.email}</span>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-phone">Телефон</Label>
+                  <Input
+                    id="edit-phone"
+                    placeholder="Введите телефон"
+                    value={editUser.phone || ""}
+                    onChange={(e) => setEditUser({ ...editUser, phone: e.target.value })}
+                    className={formErrors.phone ? "border-red-500" : ""}
+                  />
+                  {formErrors.phone && <span className="text-xs text-red-500">{formErrors.phone}</span>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-role">Роль</Label>
@@ -723,6 +813,7 @@ export default function UsersPage() {
                   <Input
                     id="new-password"
                     type="password"
+                    placeholder="Введите новый пароль"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
@@ -742,6 +833,18 @@ export default function UsersPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Модальное окно результата */}
+      <Modal
+        title={resultModalContent.title}
+        description={resultModalContent.description}
+        isOpen={showResultModal}
+        onClose={() => setShowResultModal(false)}
+      >
+        <div className="flex justify-end">
+          <Button onClick={() => setShowResultModal(false)}>OK</Button>
+        </div>
+      </Modal>
     </div>
   )
 }

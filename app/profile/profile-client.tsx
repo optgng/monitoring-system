@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch"
 import { MessageSquare } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Modal } from "@/components/ui/modal"
 
 // Тип для данных профиля
 interface ProfileData {
@@ -70,6 +71,16 @@ export function ProfileClient({ initialData }: ProfileClientProps) {
     },
   })
 
+  // Форма ошибок
+  const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({})
+
+  // Состояние модального окна результата
+  const [showResultModal, setShowResultModal] = useState(false)
+  const [resultModalContent, setResultModalContent] = useState<{ title: string; description: string }>({
+    title: "",
+    description: "",
+  })
+
   // Функция для загрузки профиля - определена вне useEffect
   async function loadProfile() {
     // Если загрузка уже началась или есть initialData, не запускаем повторно
@@ -119,7 +130,7 @@ export function ProfileClient({ initialData }: ProfileClientProps) {
         firstName: data.firstName || "",
         lastName: data.lastName || "",
         email: data.email || "",
-        phone: data.attributes?.phone?.[0] || "",
+        phone: data.attributes?.phone?.[0] || "", // Проверка на наличие attributes
       })
     } catch (error) {
       // Игнорируем ошибки отмены запроса
@@ -163,10 +174,24 @@ export function ProfileClient({ initialData }: ProfileClientProps) {
     }
   }, [initialData])
 
+  const validateProfile = (profile: ProfileData) => {
+    const errors: { [key: string]: string } = {}
+    if (!profile.firstName.trim()) errors.firstName = "Имя обязательно"
+    if (!profile.lastName.trim()) errors.lastName = "Фамилия обязательна"
+    if (!profile.email.match(/^[\w-.]+@([\w-]+\.)+[\w-]{2,}$/)) errors.email = "Некорректный email"
+    if (profile.phone && !profile.phone.match(/^\+?\d{7,15}$/)) errors.phone = "Некорректный телефон"
+    return errors
+  }
+
   // Handle profile update
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
-
+    setFormErrors({})
+    const errors = validateProfile(profile)
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors)
+      return
+    }
     try {
       setIsLoading(true)
 
@@ -180,27 +205,22 @@ export function ProfileClient({ initialData }: ProfileClientProps) {
           lastName: profile.lastName,
           email: profile.email,
           attributes: {
-            phone: [profile.phone],
+            phoneNumber: profile.phone,
           },
         }),
       })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || "Failed to update profile")
+        const errorMsg = parseKeycloakError(errorData)
+        setResultModalContent({ title: "Ошибка", description: errorMsg })
+        setShowResultModal(true)
+        return
       }
 
-      toast({
-        title: "Успех",
-        description: "Профиль успешно обновлен",
-      })
-    } catch (error) {
-      console.error("Error updating profile:", error)
-      toast({
-        title: "Ошибка",
-        description: (error as Error).message || "Не удалось обновить профиль",
-        variant: "destructive",
-      })
+      setResultModalContent({ title: "Успех", description: "Профиль успешно обновлен" })
+      setShowResultModal(true)
+      await loadProfile()
     } finally {
       setIsLoading(false)
     }
@@ -209,26 +229,15 @@ export function ProfileClient({ initialData }: ProfileClientProps) {
   // Handle password update
   const handlePasswordUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    // Validate passwords
+    setFormErrors({})
     if (passwords.newPassword !== passwords.confirmPassword) {
-      toast({
-        title: "Ошибка",
-        description: "Пароли не совпадают",
-        variant: "destructive",
-      })
+      setFormErrors({ confirmPassword: "Пароли не совпадают" })
       return
     }
-
     if (passwords.newPassword.length < 8) {
-      toast({
-        title: "Ошибка",
-        description: "Пароль должен содержать не менее 8 символов",
-        variant: "destructive",
-      })
+      setFormErrors({ newPassword: "Пароль должен содержать не менее 8 символов" })
       return
     }
-
     try {
       setIsUpdatingPassword(true)
 
@@ -245,26 +254,18 @@ export function ProfileClient({ initialData }: ProfileClientProps) {
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))
-        throw new Error(data.error || "Failed to update password")
+        const errorMsg = parseKeycloakError(data)
+        setResultModalContent({ title: "Ошибка", description: errorMsg })
+        setShowResultModal(true)
+        return
       }
 
-      // Reset password fields
+      setResultModalContent({ title: "Успех", description: "Пароль успешно обновлен" })
+      setShowResultModal(true)
       setPasswords({
         currentPassword: "",
         newPassword: "",
         confirmPassword: "",
-      })
-
-      toast({
-        title: "Успех",
-        description: "Пароль успешно обновлен",
-      })
-    } catch (error) {
-      console.error("Error updating password:", error)
-      toast({
-        title: "Ошибка",
-        description: (error as Error).message || "Не удалось обновить пароль",
-        variant: "destructive",
       })
     } finally {
       setIsUpdatingPassword(false)
@@ -351,35 +352,47 @@ export function ProfileClient({ initialData }: ProfileClientProps) {
                         <Label htmlFor="firstName">Имя</Label>
                         <Input
                           id="firstName"
+                          placeholder="Введите имя"
                           value={profile.firstName}
                           onChange={(e) => setProfile({ ...profile, firstName: e.target.value })}
+                          className={formErrors.firstName ? "border-red-500" : ""}
                         />
+                        {formErrors.firstName && <span className="text-xs text-red-500">{formErrors.firstName}</span>}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="lastName">Фамилия</Label>
                         <Input
                           id="lastName"
+                          placeholder="Введите фамилию"
                           value={profile.lastName}
                           onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
+                          className={formErrors.lastName ? "border-red-500" : ""}
                         />
+                        {formErrors.lastName && <span className="text-xs text-red-500">{formErrors.lastName}</span>}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="email">Email</Label>
                         <Input
                           id="email"
                           type="email"
+                          placeholder="Введите email"
                           value={profile.email}
                           onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                          className={formErrors.email ? "border-red-500" : ""}
                         />
+                        {formErrors.email && <span className="text-xs text-red-500">{formErrors.email}</span>}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="phone">Телефон</Label>
                         <Input
                           id="phone"
                           type="tel"
+                          placeholder="Введите номер телефона"
                           value={profile.phone}
                           onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                          className={formErrors.phone ? "border-red-500" : ""}
                         />
+                        {formErrors.phone && <span className="text-xs text-red-500">{formErrors.phone}</span>}
                       </div>
                     </>
                   )}
@@ -408,6 +421,7 @@ export function ProfileClient({ initialData }: ProfileClientProps) {
                   <Input
                     id="current-password"
                     type="password"
+                    placeholder="Введите текущий пароль"
                     value={passwords.currentPassword}
                     onChange={(e) => setPasswords({ ...passwords, currentPassword: e.target.value })}
                   />
@@ -417,18 +431,24 @@ export function ProfileClient({ initialData }: ProfileClientProps) {
                   <Input
                     id="new-password"
                     type="password"
+                    placeholder="Введите новый пароль"
                     value={passwords.newPassword}
                     onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })}
+                    className={formErrors.newPassword ? "border-red-500" : ""}
                   />
+                  {formErrors.newPassword && <span className="text-xs text-red-500">{formErrors.newPassword}</span>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="confirm-password">Подтверждение пароля</Label>
                   <Input
                     id="confirm-password"
                     type="password"
+                    placeholder="Подтвердите новый пароль"
                     value={passwords.confirmPassword}
                     onChange={(e) => setPasswords({ ...passwords, confirmPassword: e.target.value })}
+                    className={formErrors.confirmPassword ? "border-red-500" : ""}
                   />
+                  {formErrors.confirmPassword && <span className="text-xs text-red-500">{formErrors.confirmPassword}</span>}
                 </div>
               </CardContent>
               <CardFooter>
@@ -582,6 +602,41 @@ export function ProfileClient({ initialData }: ProfileClientProps) {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Модальное окно результата */}
+      <Modal
+        title={resultModalContent.title}
+        description={resultModalContent.description}
+        isOpen={showResultModal}
+        onClose={() => setShowResultModal(false)}
+      >
+        <div className="flex justify-end">
+          <Button onClick={() => setShowResultModal(false)}>OK</Button>
+        </div>
+      </Modal>
     </div>
   )
+}
+
+function parseKeycloakError(errorData: any): string {
+  if (!errorData) return "Неизвестная ошибка";
+  if (typeof errorData === "string") return errorData;
+  if (errorData.errorMessage) {
+    if (errorData.errorMessage === "User exists with same email") {
+      return "Пользователь с таким email уже существует.";
+    }
+    if (errorData.errorMessage === "User exists with same username") {
+      return "Пользователь с таким именем уже существует.";
+    }
+    if (errorData.errorMessage === "error-user-attribute-required" && errorData.params?.[0]) {
+      return `Поле "${errorData.params[0]}" обязательно для заполнения.`;
+    }
+    return errorData.errorMessage;
+  }
+  if (errorData.field && errorData.errorMessage) {
+    return `Ошибка поля "${errorData.field}": ${errorData.errorMessage}`;
+  }
+  if (errorData.error_description) return errorData.error_description;
+  if (errorData.error) return errorData.error;
+  return "Неизвестная ошибка";
 }

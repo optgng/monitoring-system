@@ -91,7 +91,7 @@ export default function DashboardsPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Дашборды</h1>
-        {userRole === "admin" && (
+        {userRole && userRole === "admin" && (
           <Button onClick={() => setIsCreateModalOpen(true)}>
             <Plus className="mr-2 h-4 w-4" /> Создать дашборд
           </Button>
