@@ -1,36 +1,50 @@
+"use client"
+
+import { useParams, useRouter } from "next/navigation"
 import { DashboardSettings } from "@/components/dashboard/dashboard-settings"
+import { toast } from "@/components/ui/use-toast"
 
-interface DashboardSettingsPageProps {
-  params: {
-    id: string
-  }
-}
+export default function DashboardSettingsPage() {
+  const params = useParams()
+  const router = useRouter()
+  const dashboardId = params.id
 
-export default function DashboardSettingsPage({ params }: DashboardSettingsPageProps) {
-  // In a real application, you would fetch the dashboard data here
-  const mockDashboardData = {
-    title: "System Overview",
-    description: "A dashboard showing system performance metrics",
+  // Имитация данных дашборда
+  const dashboardData = {
+    title: "Общий обзор системы",
+    description: "Основные метрики всех систем",
     type: "system",
     isPublic: false,
     refreshInterval: "300",
-    permissions: ["admin", "manager"],
+    permissions: ["admin", "manager", "user"],
+  }
+
+  const handleSave = (data) => {
+    // В реальном приложении здесь был бы API-запрос на сохранение
+    toast({
+      title: "Настройки сохранены",
+      description: "Настройки дашборда успешно обновлены",
+      variant: "default",
+    })
+    router.push(`/dashboards/${dashboardId}`)
+  }
+
+  const handleDelete = () => {
+    // В реальном приложении здесь был бы API-запрос на удаление
+    toast({
+      title: "Дашборд удален",
+      description: "Дашборд был успешно удален",
+      variant: "default",
+    })
+    router.push("/dashboards")
   }
 
   return (
-    <div className="container mx-auto py-6">
-      <DashboardSettings
-        dashboardId={params.id}
-        initialData={mockDashboardData}
-        onSave={(data) => {
-          console.log("Saving dashboard settings:", data)
-          // In a real application, you would save the data to the database here
-        }}
-        onDelete={() => {
-          console.log("Deleting dashboard:", params.id)
-          // In a real application, you would delete the dashboard from the database here
-        }}
-      />
-    </div>
+    <DashboardSettings
+      dashboardId={dashboardId}
+      initialData={dashboardData}
+      onSave={handleSave}
+      onDelete={handleDelete}
+    />
   )
 }
