@@ -13,6 +13,7 @@ import { Plus, Search, Edit, Trash2, Loader2, RefreshCw } from "lucide-react"
 type Device = {
   id: string
   name: string
+  system_name: string
   ip_address: string
   description: string
   status?: "online" | "offline"
@@ -45,15 +46,17 @@ export default function DevicesPage() {
 
   // Create form state
   const [createName, setCreateName] = useState("")
+  const [createSystemName, setCreateSystemName] = useState("")
   const [createIp, setCreateIp] = useState("")
   const [createDescription, setCreateDescription] = useState("")
-  const [createErrors, setCreateErrors] = useState<{ name?: string; ip?: string }>({})
+  const [createErrors, setCreateErrors] = useState<{ name?: string; system_name?: string; ip?: string }>({})
 
   // Edit form state
   const [editName, setEditName] = useState("")
+  const [editSystemName, setEditSystemName] = useState("")
   const [editIp, setEditIp] = useState("")
   const [editDescription, setEditDescription] = useState("")
-  const [editErrors, setEditErrors] = useState<{ name?: string; ip?: string; description?: string }>({})
+  const [editErrors, setEditErrors] = useState<{ name?: string; system_name?: string; ip?: string; description?: string }>({})
 
   // Получение списка устройств и статусов
   useEffect(() => {
@@ -77,6 +80,7 @@ export default function DevicesPage() {
           data.map((d: any) => ({
             id: d.id,
             name: d.name,
+            system_name: d.system_name,
             ip_address: d.ip_address,
             description: d.description,
             status: statusMap[d.name] || "offline",
@@ -112,6 +116,7 @@ export default function DevicesPage() {
   const handleEdit = (device: Device) => {
     setSelectedDevice(device)
     setEditName(device.name)
+    setEditSystemName(device.system_name)
     setEditIp(device.ip_address)
     setEditDescription(device.description)
     setEditErrors({})
@@ -126,8 +131,9 @@ export default function DevicesPage() {
 
   // Добавление устройства
   const handleCreate = async () => {
-    const errors: { name?: string; ip?: string } = {}
+    const errors: { name?: string; system_name?: string; ip?: string } = {}
     if (!validateHostName(createName)) errors.name = "Некорректное имя хоста"
+    if (!createSystemName.trim()) errors.system_name = "Имя системы обязательно"
     if (!validateIp(createIp)) errors.ip = "Некорректный IP-адрес"
     if (Object.keys(errors).length > 0) {
       setCreateErrors(errors)
@@ -140,6 +146,7 @@ export default function DevicesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: createName,
+          system_name: createSystemName,
           description: createDescription,
           ip_address: createIp,
         }),
@@ -147,6 +154,7 @@ export default function DevicesPage() {
       if (!res.ok) throw new Error("Ошибка при добавлении устройства")
       setIsCreateModalOpen(false)
       setCreateName("")
+      setCreateSystemName("")
       setCreateIp("")
       setCreateDescription("")
       setCreateErrors({})
@@ -158,6 +166,7 @@ export default function DevicesPage() {
         {
           id: updated.id,
           name: updated.name,
+          system_name: updated.system_name,
           ip_address: updated.ip_address,
           description: updated.description,
           status: "offline",
@@ -174,8 +183,9 @@ export default function DevicesPage() {
 
   // Сохранение изменений устройства
   const handleEditSave = async () => {
-    const errors: { name?: string; ip?: string; description?: string } = {}
+    const errors: { name?: string; system_name?: string; ip?: string; description?: string } = {}
     if (!validateHostName(editName)) errors.name = "Некорректное имя хоста"
+    if (!editSystemName.trim()) errors.system_name = "Имя системы обязательно"
     if (!validateIp(editIp)) errors.ip = "Некорректный IP-адрес"
     if (!editDescription.trim()) errors.description = "Описание обязательно"
     if (Object.keys(errors).length > 0) {
@@ -189,6 +199,7 @@ export default function DevicesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: editName,
+          system_name: editSystemName,
           description: editDescription,
           ip_address: editIp,
         }),
@@ -202,7 +213,7 @@ export default function DevicesPage() {
       setDevices(devices =>
         devices.map(d =>
           d.id === selectedDevice?.id
-            ? { ...d, name: editName, ip_address: editIp, description: editDescription }
+            ? { ...d, name: editName, system_name: editSystemName, ip_address: editIp, description: editDescription }
             : d,
         )
       )
@@ -255,6 +266,7 @@ export default function DevicesPage() {
         data.map((d: any) => ({
           id: d.id,
           name: d.name,
+          system_name: d.system_name,
           ip_address: d.ip_address,
           description: d.description,
           status: statusMap[d.name] || "offline",
@@ -313,6 +325,7 @@ export default function DevicesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Имя</TableHead>
+                  <TableHead>Имя системы</TableHead>
                   <TableHead>IP-адрес</TableHead>
                   <TableHead>Описание</TableHead>
                   <TableHead>Статус</TableHead>
@@ -325,6 +338,7 @@ export default function DevicesPage() {
                   filteredDevices.map((device) => (
                     <TableRow key={device.id}>
                       <TableCell className="font-medium">{device.name}</TableCell>
+                      <TableCell>{device.system_name}</TableCell>
                       <TableCell>{device.ip_address}</TableCell>
                       <TableCell>{device.description}</TableCell>
                       <TableCell>
@@ -353,7 +367,7 @@ export default function DevicesPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
                       Устройства не найдены
                     </TableCell>
                   </TableRow>
@@ -382,6 +396,17 @@ export default function DevicesPage() {
               disabled={loadingAction}
             />
             {createErrors.name && <div className="text-red-500 text-xs">{createErrors.name}</div>}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="system_name">Имя системы</Label>
+            <Input
+              id="system_name"
+              placeholder="Введите имя системы"
+              value={createSystemName}
+              onChange={e => setCreateSystemName(e.target.value)}
+              disabled={loadingAction}
+            />
+            {createErrors.system_name && <div className="text-red-500 text-xs">{createErrors.system_name}</div>}
           </div>
           <div className="space-y-2">
             <Label htmlFor="ip">IP-адрес</Label>
@@ -434,6 +459,16 @@ export default function DevicesPage() {
                 disabled={loadingAction}
               />
               {editErrors.name && <div className="text-red-500 text-xs">{editErrors.name}</div>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-system_name">Имя системы</Label>
+              <Input
+                id="edit-system_name"
+                value={editSystemName}
+                onChange={e => setEditSystemName(e.target.value)}
+                disabled={loadingAction}
+              />
+              {editErrors.system_name && <div className="text-red-500 text-xs">{editErrors.system_name}</div>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-ip">IP-адрес</Label>
