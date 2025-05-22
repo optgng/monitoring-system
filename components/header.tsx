@@ -42,7 +42,7 @@ const clearLocalAuthData = () => {
       deleteCookie("next-auth.pkce.state")
     }
     if (window && (window as any).profileCache) {
-      (window as any).profileCache.clear()
+      ;(window as any).profileCache.clear()
     }
   } catch (e) {
     // ignore
@@ -69,32 +69,20 @@ export default function Header() {
       // Сначала signOutWithErrorHandling для сброса next-auth сессии на сервере
       await signOutWithErrorHandling({ redirect: false })
       clearLocalAuthData()
-      // Формируем корректный logout-URL для Keycloak:
-      // http://{KEYCLOAK_HOST}/auth/realms/{KEYCLOAK_REALM}/protocol/openid-connect/logout?redirect_uri={ENCODED_REDIRECT_URI}
-      let keycloakHost = process.env.NEXT_PUBLIC_KEYCLOAK_HOST || process.env.KEYCLOAK_HOST
-      let realm = process.env.NEXT_PUBLIC_KEYCLOAK_REALM || process.env.KEYCLOAK_REALM
-      // Если переменные не заданы, пробуем взять из issuer
-      let issuer = process.env.NEXT_PUBLIC_KEYCLOAK_ISSUER || process.env.KEYCLOAK_ISSUER
-      if ((!keycloakHost || !realm) && issuer) {
-        // issuer: http://keycloak.localhost:8080/realms/monitoring
-        const match = issuer.match(/(https?:\/\/[^/]+)\/realms\/([^/]+)/)
-        if (match) {
-          keycloakHost = match[1].replace(/\/$/, "")
-          realm = match[2]
-        }
-      }
+
+      // Get the logout URL from the server-side API
       const postLogoutRedirectUri = `${window.location.origin}/login`
-      if (keycloakHost && realm) {
-        // Убедимся, что host оканчивается на /auth, если это Keycloak 21+
-        let hostWithAuth = keycloakHost
-        if (!/\/auth$/.test(hostWithAuth)) {
-          hostWithAuth = hostWithAuth.replace(/\/$/, "") + "/auth"
+      const response = await fetch(`/api/auth/logout-url?redirectUri=${encodeURIComponent(postLogoutRedirectUri)}`)
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.logoutUrl) {
+          window.location.href = data.logoutUrl
+          return
         }
-        const logoutUrl = `${hostWithAuth}/realms/${realm}/protocol/openid-connect/logout?redirect_uri=${encodeURIComponent(postLogoutRedirectUri)}`
-        window.location.href = logoutUrl
-        return
       }
-      // Fallback: просто редирект
+
+      // Simple fallback - no environment variables used
       window.location.href = "/login"
     } catch (error) {
       logger.error("Error during sign out", error)

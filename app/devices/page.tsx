@@ -23,7 +23,7 @@ type Device = {
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://monitoring-service.localhost:8000"
 
 function validateHostName(name: string) {
-  return /^[a-zA-Z0-9\-]{2,64}$/.test(name)
+  return /^[a-zA-Z0-9-]{2,64}$/.test(name)
 }
 function validateIp(ip: string) {
   return /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(ip)
@@ -56,20 +56,25 @@ export default function DevicesPage() {
   const [editSystemName, setEditSystemName] = useState("")
   const [editIp, setEditIp] = useState("")
   const [editDescription, setEditDescription] = useState("")
-  const [editErrors, setEditErrors] = useState<{ name?: string; system_name?: string; ip?: string; description?: string }>({})
+  const [editErrors, setEditErrors] = useState<{
+    name?: string
+    system_name?: string
+    ip?: string
+    description?: string
+  }>({})
 
   // Получение списка устройств и статусов
   useEffect(() => {
     setLoading(true)
     fetch(`${API_URL}/api/v1/devices/`)
-      .then(res => res.json())
+      .then((res) => res.json())
       .then(async (data) => {
         // Получаем статусы устройств через метрики
         const metricsRes = await fetch(`${API_URL}/api/v1/metrics/metrics`)
         const metricsText = await metricsRes.text()
         // Парсим device_up{host_name="..."} ...\n
         const statusMap: Record<string, "online" | "offline"> = {}
-        metricsText.split("\n").forEach(line => {
+        metricsText.split("\n").forEach((line) => {
           const match = line.match(/device_up\{host_name="([^"]+)"\}\s+([01])/)
           if (match) {
             statusMap[match[1]] = match[2] === "1" ? "online" : "offline"
@@ -85,7 +90,7 @@ export default function DevicesPage() {
             description: d.description,
             status: statusMap[d.name] || "offline",
             lastCheck: now.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }),
-          }))
+          })),
         )
         setLoading(false)
       })
@@ -162,7 +167,7 @@ export default function DevicesPage() {
       setIsSuccessModalOpen(true)
       // Обновить список устройств
       const updated = await res.json()
-      setDevices(prev => [
+      setDevices((prev) => [
         {
           id: updated.id,
           name: updated.name,
@@ -210,12 +215,12 @@ export default function DevicesPage() {
       setSuccessMessage("Устройство успешно изменено")
       setIsSuccessModalOpen(true)
       // Обновить список устройств
-      setDevices(devices =>
-        devices.map(d =>
+      setDevices((devices) =>
+        devices.map((d) =>
           d.id === selectedDevice?.id
             ? { ...d, name: editName, system_name: editSystemName, ip_address: editIp, description: editDescription }
             : d,
-        )
+        ),
       )
     } catch (e: any) {
       setErrorMessage(e.message || "Ошибка при изменении устройства")
@@ -232,7 +237,7 @@ export default function DevicesPage() {
         method: "DELETE",
       })
       if (!res.ok) throw new Error("Ошибка при удалении устройства")
-      setDevices(devices => devices.filter(d => d.id !== selectedDevice?.id))
+      setDevices((devices) => devices.filter((d) => d.id !== selectedDevice?.id))
       setIsDeleteModalOpen(false)
       setSelectedDevice(null)
       setSuccessMessage("Устройство успешно удалено")
@@ -255,7 +260,7 @@ export default function DevicesPage() {
       const metricsRes = await fetch(`${API_URL}/api/v1/metrics/metrics`)
       const metricsText = await metricsRes.text()
       const statusMap: Record<string, "online" | "offline"> = {}
-      metricsText.split("\n").forEach(line => {
+      metricsText.split("\n").forEach((line) => {
         const match = line.match(/device_up\{host_name="([^"]+)"\}\s+([01])/)
         if (match) {
           statusMap[match[1]] = match[2] === "1" ? "online" : "offline"
@@ -271,7 +276,7 @@ export default function DevicesPage() {
           description: d.description,
           status: statusMap[d.name] || "offline",
           lastCheck: now.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }),
-        }))
+        })),
       )
     } catch {
       setDevices([])
@@ -392,7 +397,7 @@ export default function DevicesPage() {
               id="name"
               placeholder="Введите имя устройства"
               value={createName}
-              onChange={e => setCreateName(e.target.value)}
+              onChange={(e) => setCreateName(e.target.value)}
               disabled={loadingAction}
             />
             {createErrors.name && <div className="text-red-500 text-xs">{createErrors.name}</div>}
@@ -403,7 +408,7 @@ export default function DevicesPage() {
               id="system_name"
               placeholder="Введите имя системы"
               value={createSystemName}
-              onChange={e => setCreateSystemName(e.target.value)}
+              onChange={(e) => setCreateSystemName(e.target.value)}
               disabled={loadingAction}
             />
             {createErrors.system_name && <div className="text-red-500 text-xs">{createErrors.system_name}</div>}
@@ -414,7 +419,7 @@ export default function DevicesPage() {
               id="ip"
               placeholder="Введите IP-адрес"
               value={createIp}
-              onChange={e => setCreateIp(e.target.value)}
+              onChange={(e) => setCreateIp(e.target.value)}
               disabled={loadingAction}
             />
             {createErrors.ip && <div className="text-red-500 text-xs">{createErrors.ip}</div>}
@@ -425,7 +430,7 @@ export default function DevicesPage() {
               id="description"
               placeholder="Введите описание"
               value={createDescription}
-              onChange={e => setCreateDescription(e.target.value)}
+              onChange={(e) => setCreateDescription(e.target.value)}
               disabled={loadingAction}
             />
           </div>
@@ -455,7 +460,7 @@ export default function DevicesPage() {
               <Input
                 id="edit-name"
                 value={editName}
-                onChange={e => setEditName(e.target.value)}
+                onChange={(e) => setEditName(e.target.value)}
                 disabled={loadingAction}
               />
               {editErrors.name && <div className="text-red-500 text-xs">{editErrors.name}</div>}
@@ -465,19 +470,14 @@ export default function DevicesPage() {
               <Input
                 id="edit-system_name"
                 value={editSystemName}
-                onChange={e => setEditSystemName(e.target.value)}
+                onChange={(e) => setEditSystemName(e.target.value)}
                 disabled={loadingAction}
               />
               {editErrors.system_name && <div className="text-red-500 text-xs">{editErrors.system_name}</div>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-ip">IP-адрес</Label>
-              <Input
-                id="edit-ip"
-                value={editIp}
-                onChange={e => setEditIp(e.target.value)}
-                disabled={loadingAction}
-              />
+              <Input id="edit-ip" value={editIp} onChange={(e) => setEditIp(e.target.value)} disabled={loadingAction} />
               {editErrors.ip && <div className="text-red-500 text-xs">{editErrors.ip}</div>}
             </div>
             <div className="space-y-2">
@@ -485,7 +485,7 @@ export default function DevicesPage() {
               <Input
                 id="edit-description"
                 value={editDescription}
-                onChange={e => setEditDescription(e.target.value)}
+                onChange={(e) => setEditDescription(e.target.value)}
                 disabled={loadingAction}
               />
               {editErrors.description && <div className="text-red-500 text-xs">{editErrors.description}</div>}

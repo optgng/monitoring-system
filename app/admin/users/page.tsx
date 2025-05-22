@@ -380,7 +380,10 @@ export default function UsersPage() {
       // Update users list
       setUsers(users.map((user) => (user.id === userId ? { ...user, enabled: !enabled } : user)))
 
-      setResultModalContent({ title: "Успех", description: `Пользователь успешно ${!enabled ? "разблокирован" : "заблокирован"}` })
+      setResultModalContent({
+        title: "Успех",
+        description: `Пользователь успешно ${!enabled ? "разблокирован" : "заблокирован"}`,
+      })
       setShowResultModal(true)
     } catch (error) {
       setResultModalContent({ title: "Ошибка", description: "Не удалось изменить статус пользователя" })
@@ -661,21 +664,18 @@ export default function UsersPage() {
                     </TableCell>
                     <TableCell>
                       <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${user.enabled
-                          ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
-                          : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
-                          }`}
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                          user.enabled
+                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
+                            : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
+                        }`}
                       >
                         {user.enabled ? "Активен" : "Заблокирован"}
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => handleEditDialogOpen(user)}
-                        >
+                        <Button variant="outline" size="icon" onClick={() => handleEditDialogOpen(user)}>
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button

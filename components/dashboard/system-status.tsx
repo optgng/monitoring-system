@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, CheckCircle2, AlertTriangle, XCircle } from "lucide-react"
 
@@ -60,16 +60,14 @@ export function SystemStatus() {
           grouped[d.system_name].push(d)
         })
         // Формируем массив систем с общим статусом
-        const systemGroups: SystemGroup[] = Object.entries(grouped).map(
-          ([system_name, devices]) => {
-            // Если хотя бы одно offline — outage, если все online — operational, иначе degraded
-            const onlineCount = devices.filter((d) => d.status === "online").length
-            let status: SystemGroup["status"] = "operational"
-            if (onlineCount === 0) status = "outage"
-            else if (onlineCount < devices.length) status = "degraded"
-            return { system_name, devices, status }
-          }
-        )
+        const systemGroups: SystemGroup[] = Object.entries(grouped).map(([system_name, devices]) => {
+          // Если хотя бы одно offline — outage, если все online — operational, иначе degraded
+          const onlineCount = devices.filter((d) => d.status === "online").length
+          let status: SystemGroup["status"] = "operational"
+          if (onlineCount === 0) status = "outage"
+          else if (onlineCount < devices.length) status = "degraded"
+          return { system_name, devices, status }
+        })
         setSystems(systemGroups)
       } catch {
         setSystems([])
@@ -130,9 +128,7 @@ export function SystemStatus() {
                 {system.devices.map((device) => (
                   <div key={device.id} className="flex items-center justify-between rounded-lg border p-2">
                     <span className="font-medium">{device.name}</span>
-                    <div className="flex items-center gap-2">
-                      {getDeviceStatusIcon(device.status)}
-                    </div>
+                    <div className="flex items-center gap-2">{getDeviceStatusIcon(device.status)}</div>
                   </div>
                 ))}
               </div>

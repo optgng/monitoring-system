@@ -14,7 +14,7 @@ const inter = Inter({ subsets: ["latin", "cyrillic"] })
 export const metadata = {
   title: "Система мониторинга",
   description: "Система мониторинга сервисов и устройств",
-  generator: 'v0.dev'
+  generator: "v0.dev",
 }
 
 export default async function RootLayout({

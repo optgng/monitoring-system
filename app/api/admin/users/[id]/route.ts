@@ -57,9 +57,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (attributes && typeof attributes === "object") {
       kcAttributes = {}
       for (const key in attributes) {
-        kcAttributes[key] = Array.isArray(attributes[key])
-          ? attributes[key]
-          : [attributes[key]]
+        kcAttributes[key] = Array.isArray(attributes[key]) ? attributes[key] : [attributes[key]]
       }
     }
 

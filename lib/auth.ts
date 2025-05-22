@@ -52,7 +52,7 @@ export function hasPermission(user: User | null, permission: string): boolean {
       "manage_users",
       "manage_devices",
       "manage_notifications",
-      "generate_reports"
+      "generate_reports",
     ],
     manager: ["view_dashboards", "generate_reports"],
     support: ["view_dashboards"],

@@ -95,9 +95,7 @@ export async function POST(req: NextRequest) {
       userData.attributes = {}
       for (const key in attributes) {
         // Keycloak ожидает массив строк для каждого атрибута
-        userData.attributes[key] = Array.isArray(attributes[key])
-          ? attributes[key]
-          : [attributes[key]]
+        userData.attributes[key] = Array.isArray(attributes[key]) ? attributes[key] : [attributes[key]]
       }
     }
 

@@ -448,7 +448,9 @@ export function ProfileClient({ initialData }: ProfileClientProps) {
                     onChange={(e) => setPasswords({ ...passwords, confirmPassword: e.target.value })}
                     className={formErrors.confirmPassword ? "border-red-500" : ""}
                   />
-                  {formErrors.confirmPassword && <span className="text-xs text-red-500">{formErrors.confirmPassword}</span>}
+                  {formErrors.confirmPassword && (
+                    <span className="text-xs text-red-500">{formErrors.confirmPassword}</span>
+                  )}
                 </div>
               </CardContent>
               <CardFooter>
@@ -619,24 +621,24 @@ export function ProfileClient({ initialData }: ProfileClientProps) {
 }
 
 function parseKeycloakError(errorData: any): string {
-  if (!errorData) return "Неизвестная ошибка";
-  if (typeof errorData === "string") return errorData;
+  if (!errorData) return "Неизвестная ошибка"
+  if (typeof errorData === "string") return errorData
   if (errorData.errorMessage) {
     if (errorData.errorMessage === "User exists with same email") {
-      return "Пользователь с таким email уже существует.";
+      return "Пользователь с таким email уже существует."
     }
     if (errorData.errorMessage === "User exists with same username") {
-      return "Пользователь с таким именем уже существует.";
+      return "Пользователь с таким именем уже существует."
     }
     if (errorData.errorMessage === "error-user-attribute-required" && errorData.params?.[0]) {
-      return `Поле "${errorData.params[0]}" обязательно для заполнения.`;
+      return `Поле "${errorData.params[0]}" обязательно для заполнения.`
     }
-    return errorData.errorMessage;
+    return errorData.errorMessage
   }
   if (errorData.field && errorData.errorMessage) {
-    return `Ошибка поля "${errorData.field}": ${errorData.errorMessage}`;
+    return `Ошибка поля "${errorData.field}": ${errorData.errorMessage}`
   }
-  if (errorData.error_description) return errorData.error_description;
-  if (errorData.error) return errorData.error;
-  return "Неизвестная ошибка";
+  if (errorData.error_description) return errorData.error_description
+  if (errorData.error) return errorData.error
+  return "Неизвестная ошибка"
 }

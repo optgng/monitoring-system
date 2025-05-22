@@ -205,10 +205,12 @@ export class KeycloakService {
         try {
           // Попытка распарсить JSON, если есть тело
           const text = await response.text()
-          errorData = text ? JSON.parse(text) : {
-            error: `HTTP Error ${response.status}`,
-            error_description: response.statusText,
-          }
+          errorData = text
+            ? JSON.parse(text)
+            : {
+                error: `HTTP Error ${response.status}`,
+                error_description: response.statusText,
+              }
         } catch (e) {
           errorData = {
             error: `HTTP Error ${response.status}`,
