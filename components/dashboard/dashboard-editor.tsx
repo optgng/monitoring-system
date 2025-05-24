@@ -15,23 +15,47 @@ import { PanelEditor } from "./panel-editor"
 import { Modal } from "@/components/ui/modal"
 import { VariableEditor } from "./variable-editor"
 import { AnnotationEditor } from "./annotation-editor"
+import { dashboardApi, type Dashboard, type Panel } from "@/lib/dashboard-api"
 
 interface DashboardEditorProps {
-  dashboardId: string | number
-  initialData: any
-  onSave: (data: any) => void
+  dashboardUid?: string
+  initialData?: Dashboard
   isCreating?: boolean
 }
 
-export function DashboardEditor({ dashboardId, initialData, onSave, isCreating = false }: DashboardEditorProps) {
-  const [dashboard, setDashboard] = useState(initialData)
+export function DashboardEditor({ dashboardUid, initialData, isCreating = false }: DashboardEditorProps) {
+  const [dashboard, setDashboard] = useState<Dashboard>(
+    initialData || {
+      uid: "",
+      title: "",
+      description: "",
+      tags: [],
+      timezone: "browser",
+      refresh: "5m",
+      time: {
+        from: "now-1h",
+        to: "now",
+      },
+      templating: {
+        list: [],
+      },
+      annotations: {
+        list: [],
+      },
+      panels: [],
+      editable: true,
+      style: "dark",
+    },
+  )
+
+  const [loading, setLoading] = useState(false)
   const [isPanelModalOpen, setIsPanelModalOpen] = useState(false)
   const [isVariableModalOpen, setIsVariableModalOpen] = useState(false)
   const [isAnnotationModalOpen, setIsAnnotationModalOpen] = useState(false)
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
   const [isResultModalOpen, setIsResultModalOpen] = useState(false)
   const [resultModal, setResultModal] = useState({ title: "", description: "", type: "success" })
-  const [editingPanel, setEditingPanel] = useState(null)
+  const [editingPanel, setEditingPanel] = useState<Panel | null>(null)
   const [editingVariable, setEditingVariable] = useState(null)
   const [editingAnnotation, setEditingAnnotation] = useState(null)
   const [importJson, setImportJson] = useState("")
@@ -53,11 +77,50 @@ export function DashboardEditor({ dashboardId, initialData, onSave, isCreating =
       const newDashboard = { ...prev }
       let current = newDashboard
       for (let i = 0; i < path.length - 1; i++) {
+        if (!current[path[i]]) current[path[i]] = {}
         current = current[path[i]]
       }
       current[path[path.length - 1]] = value
       return newDashboard
     })
+  }
+
+  // Save dashboard
+  const handleSave = async () => {
+    if (!dashboard.title || !dashboard.description) {
+      showResultModal("Ошибка", "Пожалуйста, заполните название и описание дашборда", "error")
+      return
+    }
+
+    setLoading(true)
+    try {
+      let response
+      if (isCreating) {
+        response = await dashboardApi.createDashboard(dashboard)
+      } else if (dashboardUid) {
+        response = await dashboardApi.updateDashboard(dashboardUid, dashboard)
+      }
+
+      if (response?.status === "success") {
+        showResultModal(
+          isCreating ? "Дашборд создан" : "Дашборд сохранен",
+          isCreating ? "Дашборд был успешно создан" : "Все изменения успешно сохранены",
+        )
+
+        if (isCreating && response.data.uid) {
+          // Redirect to the new dashboard
+          setTimeout(() => {
+            router.push(`/dashboards/${response.data.uid}`)
+          }, 1500)
+        }
+      } else {
+        showResultModal("Ошибка сохранения", response?.message || "Не удалось сохранить дашборд", "error")
+      }
+    } catch (error) {
+      showResultModal("Ошибка", "Произошла ошибка при сохранении дашборда", "error")
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Panel management
@@ -66,168 +129,155 @@ export function DashboardEditor({ dashboardId, initialData, onSave, isCreating =
     setIsPanelModalOpen(true)
   }
 
-  const handleEditPanel = (panel) => {
+  const handleEditPanel = (panel: Panel) => {
     setEditingPanel(panel)
     setIsPanelModalOpen(true)
   }
 
-  const handleSavePanel = (panelData) => {
-    if (editingPanel) {
-      setDashboard((prev) => ({
-        ...prev,
-        panels: prev.panels.map((p) => (p.id === editingPanel.id ? { ...panelData, id: editingPanel.id } : p)),
-      }))
-      showResultModal("Панель обновлена", "Панель была успешно обновлена")
-    } else {
-      const newPanel = {
-        ...panelData,
-        id: Date.now(),
-        gridPos: {
-          h: 8,
-          w: 12,
-          x: 0,
-          y: dashboard.panels.length * 8,
-        },
+  const handleSavePanel = async (panelData: Partial<Panel>) => {
+    if (isCreating) {
+      // For new dashboards, just add to local state
+      if (editingPanel) {
+        setDashboard((prev) => ({
+          ...prev,
+          panels: prev.panels.map((p) =>
+            p.id === editingPanel.id ? ({ ...panelData, id: editingPanel.id } as Panel) : p,
+          ),
+        }))
+        showResultModal("Панель обновлена", "Панель была успешно обновлена")
+      } else {
+        const newPanel: Panel = {
+          ...panelData,
+          id: Date.now(),
+          gridPos: {
+            h: 8,
+            w: 12,
+            x: 0,
+            y: dashboard.panels.length * 8,
+          },
+        } as Panel
+        setDashboard((prev) => ({
+          ...prev,
+          panels: [...prev.panels, newPanel],
+        }))
+        showResultModal("Панель добавлена", "Новая панель была успешно добавлена")
       }
-      setDashboard((prev) => ({
-        ...prev,
-        panels: [...prev.panels, newPanel],
-      }))
-      showResultModal("Панель добавлена", "Новая панель была успешно добавлена")
+      setIsPanelModalOpen(false)
+    } else if (dashboardUid) {
+      // For existing dashboards, use API
+      try {
+        if (editingPanel) {
+          const response = await dashboardApi.updatePanel(dashboardUid, editingPanel.id, panelData)
+          if (response.status === "success") {
+            setDashboard((prev) => ({
+              ...prev,
+              panels: prev.panels.map((p) => (p.id === editingPanel.id ? response.data : p)),
+            }))
+            showResultModal("Панель обновлена", "Панель была успешно обновлена")
+          } else {
+            showResultModal("Ошибка обновления", response.message || "Не удалось обновить панель", "error")
+          }
+        } else {
+          const response = await dashboardApi.createPanel(dashboardUid, panelData)
+          if (response.status === "success") {
+            setDashboard((prev) => ({
+              ...prev,
+              panels: [...prev.panels, response.data],
+            }))
+            showResultModal("Панель добавлена", "Новая панель была успешно добавлена")
+          } else {
+            showResultModal("Ошибка создания", response.message || "Не удалось создать панель", "error")
+          }
+        }
+        setIsPanelModalOpen(false)
+      } catch (error) {
+        showResultModal("Ошибка", "Произошла ошибка при сохранении панели", "error")
+      }
     }
-    setIsPanelModalOpen(false)
   }
 
-  const handleDeletePanel = (panelId) => {
-    setDashboard((prev) => ({
-      ...prev,
-      panels: prev.panels.filter((p) => p.id !== panelId),
-    }))
-    showResultModal("Панель удалена", "Панель была успешно удалена")
-  }
-
-  // Variable management
-  const handleAddVariable = () => {
-    setEditingVariable(null)
-    setIsVariableModalOpen(true)
-  }
-
-  const handleEditVariable = (variable) => {
-    setEditingVariable(variable)
-    setIsVariableModalOpen(true)
-  }
-
-  const handleSaveVariable = (variableData) => {
-    if (editingVariable) {
+  const handleDeletePanel = async (panelId: number) => {
+    if (isCreating) {
       setDashboard((prev) => ({
         ...prev,
-        templating: {
-          ...prev.templating,
-          list: prev.templating.list.map((v) => (v.name === editingVariable.name ? variableData : v)),
-        },
+        panels: prev.panels.filter((p) => p.id !== panelId),
       }))
-      showResultModal("Переменная обновлена", "Переменная была успешно обновлена")
-    } else {
-      setDashboard((prev) => ({
-        ...prev,
-        templating: {
-          ...prev.templating,
-          list: [...(prev.templating?.list || []), variableData],
-        },
-      }))
-      showResultModal("Переменная добавлена", "Новая переменная была успешно добавлена")
+      showResultModal("Панель удалена", "Панель была успешно удалена")
+    } else if (dashboardUid) {
+      try {
+        const response = await dashboardApi.deletePanel(dashboardUid, panelId)
+        if (response.status === "success") {
+          setDashboard((prev) => ({
+            ...prev,
+            panels: prev.panels.filter((p) => p.id !== panelId),
+          }))
+          showResultModal("Панель удалена", "Панель была успешно удалена")
+        } else {
+          showResultModal("Ошибка удаления", response.message || "Не удалось удалить панель", "error")
+        }
+      } catch (error) {
+        showResultModal("Ошибка", "Произошла ошибка при удалении панели", "error")
+      }
     }
-    setIsVariableModalOpen(false)
-  }
-
-  const handleDeleteVariable = (variableName) => {
-    setDashboard((prev) => ({
-      ...prev,
-      templating: {
-        ...prev.templating,
-        list: prev.templating.list.filter((v) => v.name !== variableName),
-      },
-    }))
-    showResultModal("Переменная удалена", "Переменная была успешно удалена")
-  }
-
-  // Annotation management
-  const handleAddAnnotation = () => {
-    setEditingAnnotation(null)
-    setIsAnnotationModalOpen(true)
-  }
-
-  const handleEditAnnotation = (annotation) => {
-    setEditingAnnotation(annotation)
-    setIsAnnotationModalOpen(true)
-  }
-
-  const handleSaveAnnotation = (annotationData) => {
-    if (editingAnnotation) {
-      setDashboard((prev) => ({
-        ...prev,
-        annotations: {
-          ...prev.annotations,
-          list: prev.annotations.list.map((a) => (a.name === editingAnnotation.name ? annotationData : a)),
-        },
-      }))
-      showResultModal("Аннотация обновлена", "Аннотация была успешно обновлена")
-    } else {
-      setDashboard((prev) => ({
-        ...prev,
-        annotations: {
-          ...prev.annotations,
-          list: [...(prev.annotations?.list || []), annotationData],
-        },
-      }))
-      showResultModal("Аннотация добавлена", "Новая аннотация была успешно добавлена")
-    }
-    setIsAnnotationModalOpen(false)
-  }
-
-  const handleDeleteAnnotation = (annotationName) => {
-    setDashboard((prev) => ({
-      ...prev,
-      annotations: {
-        ...prev.annotations,
-        list: prev.annotations.list.filter((a) => a.name !== annotationName),
-      },
-    }))
-    showResultModal("Аннотация удалена", "Аннотация была успешно удалена")
-  }
-
-  // Save dashboard
-  const handleSave = () => {
-    if (!dashboard.title || !dashboard.description) {
-      showResultModal("Ошибка", "Пожалуйста, заполните название и описание дашборда", "error")
-      return
-    }
-
-    onSave(dashboard)
   }
 
   // Export dashboard
-  const handleExport = () => {
-    const dataStr = JSON.stringify(dashboard, null, 2)
-    const dataUri = "data:application/json;charset=utf-8," + encodeURIComponent(dataStr)
-    const exportFileDefaultName = `dashboard-${dashboard.title || "untitled"}.json`
+  const handleExport = async () => {
+    if (dashboardUid) {
+      try {
+        const response = await dashboardApi.exportDashboard(dashboardUid)
+        if (response.status === "success") {
+          const dataStr = response.data
+          const dataUri = "data:application/json;charset=utf-8," + encodeURIComponent(dataStr)
+          const exportFileDefaultName = `dashboard-${dashboard.title || "untitled"}.json`
 
-    const linkElement = document.createElement("a")
-    linkElement.setAttribute("href", dataUri)
-    linkElement.setAttribute("download", exportFileDefaultName)
-    linkElement.click()
+          const linkElement = document.createElement("a")
+          linkElement.setAttribute("href", dataUri)
+          linkElement.setAttribute("download", exportFileDefaultName)
+          linkElement.click()
 
-    showResultModal("Дашборд экспортирован", "Конфигурация дашборда была успешно экспортирована")
+          showResultModal("Дашборд экспортирован", "Конфигурация дашборда была успешно экспортирована")
+        } else {
+          showResultModal("Ошибка экспорта", response.message || "Не удалось экспортировать дашборд", "error")
+        }
+      } catch (error) {
+        showResultModal("Ошибка", "Произошла ошибка при экспорте дашборда", "error")
+      }
+    } else {
+      // For new dashboards, export current state
+      const dataStr = JSON.stringify(dashboard, null, 2)
+      const dataUri = "data:application/json;charset=utf-8," + encodeURIComponent(dataStr)
+      const exportFileDefaultName = `dashboard-${dashboard.title || "untitled"}.json`
+
+      const linkElement = document.createElement("a")
+      linkElement.setAttribute("href", dataUri)
+      linkElement.setAttribute("download", exportFileDefaultName)
+      linkElement.click()
+
+      showResultModal("Дашборд экспортирован", "Конфигурация дашборда была успешно экспортирована")
+    }
   }
 
   // Import dashboard
-  const handleImport = () => {
+  const handleImport = async () => {
     try {
-      const importedDashboard = JSON.parse(importJson)
-      setDashboard(importedDashboard)
-      setIsImportModalOpen(false)
-      setImportJson("")
-      showResultModal("Дашборд импортирован", "Конфигурация дашборда была успешно импортирована")
+      if (isCreating) {
+        const importedDashboard = JSON.parse(importJson)
+        setDashboard(importedDashboard)
+        setIsImportModalOpen(false)
+        setImportJson("")
+        showResultModal("Дашборд импортирован", "Конфигурация дашборда была успешно импортирована")
+      } else {
+        const response = await dashboardApi.importDashboard(importJson)
+        if (response.status === "success") {
+          setDashboard(response.data)
+          setIsImportModalOpen(false)
+          setImportJson("")
+          showResultModal("Дашборд импортирован", "Конфигурация дашборда была успешно импортирована")
+        } else {
+          showResultModal("Ошибка импорта", response.message || "Не удалось импортировать дашборд", "error")
+        }
+      }
     } catch (error) {
       showResultModal("Ошибка импорта", "Неверный формат JSON", "error")
     }
@@ -245,21 +295,17 @@ export function DashboardEditor({ dashboardId, initialData, onSave, isCreating =
           </h1>
         </div>
         <div className="flex gap-2">
-          {!isCreating && (
-            <>
-              <Button variant="outline" onClick={handleExport}>
-                <Download className="mr-2 h-4 w-4" />
-                Экспорт
-              </Button>
-              <Button variant="outline" onClick={() => setIsImportModalOpen(true)}>
-                <Upload className="mr-2 h-4 w-4" />
-                Импорт JSON
-              </Button>
-            </>
-          )}
-          <Button onClick={handleSave}>
+          <Button variant="outline" onClick={handleExport}>
+            <Download className="mr-2 h-4 w-4" />
+            Экспорт
+          </Button>
+          <Button variant="outline" onClick={() => setIsImportModalOpen(true)}>
+            <Upload className="mr-2 h-4 w-4" />
+            Импорт JSON
+          </Button>
+          <Button onClick={handleSave} disabled={loading}>
             <Save className="mr-2 h-4 w-4" />
-            Сохранить
+            {loading ? "Сохранение..." : "Сохранить"}
           </Button>
         </div>
       </div>
@@ -296,6 +342,7 @@ export function DashboardEditor({ dashboardId, initialData, onSave, isCreating =
                     value={dashboard.uid}
                     onChange={(e) => handleDashboardChange("uid", e.target.value)}
                     placeholder="Уникальный идентификатор"
+                    disabled={!isCreating}
                   />
                 </div>
               </div>
@@ -473,7 +520,7 @@ export function DashboardEditor({ dashboardId, initialData, onSave, isCreating =
                       Переменные позволяют создавать интерактивные и переиспользуемые дашборды
                     </p>
                   </div>
-                  <Button onClick={handleAddVariable}>
+                  <Button onClick={() => setIsVariableModalOpen(true)}>
                     <Plus className="mr-2 h-4 w-4" />
                     Добавить переменную
                   </Button>
@@ -489,10 +536,10 @@ export function DashboardEditor({ dashboardId, initialData, onSave, isCreating =
                             <p className="text-sm text-muted-foreground">Тип: {variable.type}</p>
                           </div>
                           <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={() => handleEditVariable(variable)}>
+                            <Button variant="outline" size="sm" onClick={() => setEditingVariable(variable)}>
                               Редактировать
                             </Button>
-                            <Button variant="outline" size="sm" onClick={() => handleDeleteVariable(variable.name)}>
+                            <Button variant="outline" size="sm">
                               Удалить
                             </Button>
                           </div>
@@ -511,7 +558,7 @@ export function DashboardEditor({ dashboardId, initialData, onSave, isCreating =
                       Аннотации отображают события на графиках в виде вертикальных линий
                     </p>
                   </div>
-                  <Button onClick={handleAddAnnotation}>
+                  <Button onClick={() => setIsAnnotationModalOpen(true)}>
                     <Plus className="mr-2 h-4 w-4" />
                     Добавить аннотацию
                   </Button>
@@ -527,10 +574,10 @@ export function DashboardEditor({ dashboardId, initialData, onSave, isCreating =
                             <p className="text-sm text-muted-foreground">Источник: {annotation.datasource}</p>
                           </div>
                           <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={() => handleEditAnnotation(annotation)}>
+                            <Button variant="outline" size="sm" onClick={() => setEditingAnnotation(annotation)}>
                               Редактировать
                             </Button>
-                            <Button variant="outline" size="sm" onClick={() => handleDeleteAnnotation(annotation.name)}>
+                            <Button variant="outline" size="sm">
                               Удалить
                             </Button>
                           </div>
@@ -602,7 +649,7 @@ export function DashboardEditor({ dashboardId, initialData, onSave, isCreating =
       >
         <VariableEditor
           variable={editingVariable}
-          onSave={handleSaveVariable}
+          onSave={() => setIsVariableModalOpen(false)}
           onCancel={() => setIsVariableModalOpen(false)}
         />
       </Modal>
@@ -617,7 +664,7 @@ export function DashboardEditor({ dashboardId, initialData, onSave, isCreating =
       >
         <AnnotationEditor
           annotation={editingAnnotation}
-          onSave={handleSaveAnnotation}
+          onSave={() => setIsAnnotationModalOpen(false)}
           onCancel={() => setIsAnnotationModalOpen(false)}
         />
       </Modal>

@@ -1,0 +1,11 @@
+// Re-export all UI components for easier imports
+export { Button } from "./ui/button"
+export { Input } from "./ui/input"
+export { Textarea } from "./ui/textarea"
+export { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
+export { Switch } from "./ui/switch"
+export { Label } from "./ui/label"
+export { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
+export { Modal } from "./ui/modal"
+export { Separator } from "./ui/separator"
