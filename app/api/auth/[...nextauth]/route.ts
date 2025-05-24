@@ -36,16 +36,58 @@ interface KeycloakToken {
   email: string
 }
 
+// Validate environment variables
+function validateEnvVars() {
+  const required = [
+    "KEYCLOAK_CLIENT_ID",
+    "KEYCLOAK_CLIENT_SECRET",
+    "KEYCLOAK_ISSUER",
+    "NEXTAUTH_SECRET",
+    "NEXTAUTH_URL",
+  ]
+
+  const missing = required.filter((key) => !process.env[key])
+
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(", ")}`)
+  }
+}
+
+// Validate environment on startup
+try {
+  validateEnvVars()
+} catch (error) {
+  logger.error("Environment validation failed", error)
+}
+
 // NextAuth configuration options
 export const authOptions: NextAuthOptions = {
   providers: [
     KeycloakProvider({
-      clientId: process.env.KEYCLOAK_CLIENT_ID || "",
-      clientSecret: process.env.KEYCLOAK_CLIENT_SECRET || "",
-      issuer: process.env.KEYCLOAK_ISSUER || "",
-      // Add timeout configuration
+      clientId: process.env.KEYCLOAK_CLIENT_ID!,
+      clientSecret: process.env.KEYCLOAK_CLIENT_SECRET!,
+      issuer: process.env.KEYCLOAK_ISSUER!,
+      // Add timeout and retry configuration
       httpOptions: {
-        timeout: 10000, // 10 seconds timeout
+        timeout: 20000, // 20 seconds timeout
+      },
+      // Add wellKnown configuration for better reliability
+      wellKnown: `${process.env.KEYCLOAK_ISSUER}/.well-known/openid_configuration`,
+      // Add authorization parameters
+      authorization: {
+        params: {
+          scope: "openid email profile",
+          response_type: "code",
+        },
+      },
+      // Add profile mapping
+      profile(profile) {
+        return {
+          id: profile.sub,
+          name: profile.name ?? profile.preferred_username,
+          email: profile.email,
+          image: profile.picture,
+        }
       },
     }),
   ],
@@ -132,6 +174,27 @@ export const authOptions: NextAuthOptions = {
       }
       return session
     },
+    async signIn({ user, account, profile, email, credentials }) {
+      // Add additional sign-in validation if needed
+      try {
+        logger.debug("Sign in attempt", {
+          userId: user.id,
+          email: user.email,
+          provider: account?.provider,
+        })
+        return true
+      } catch (error) {
+        logger.error("Sign in error", error)
+        return false
+      }
+    },
+    async redirect({ url, baseUrl }) {
+      // Allows relative callback URLs
+      if (url.startsWith("/")) return `${baseUrl}${url}`
+      // Allows callback URLs on the same origin
+      else if (new URL(url).origin === baseUrl) return url
+      return baseUrl
+    },
   },
   pages: {
     signIn: "/login",
@@ -146,13 +209,30 @@ export const authOptions: NextAuthOptions = {
   debug: process.env.NODE_ENV === "development",
   logger: {
     error: (code, metadata) => {
-      logger.error(code, metadata)
+      logger.error(`NextAuth Error: ${code}`, metadata)
     },
     warn: (code) => {
-      logger.warn(code)
+      logger.warn(`NextAuth Warning: ${code}`)
     },
     debug: (code, metadata) => {
-      logger.debug(code, metadata)
+      if (process.env.NODE_ENV === "development") {
+        logger.debug(`NextAuth Debug: ${code}`, metadata)
+      }
+    },
+  },
+  // Add events for better debugging
+  events: {
+    async signIn(message) {
+      logger.info("User signed in", { user: message.user.email })
+    },
+    async signOut(message) {
+      logger.info("User signed out", { token: message.token?.sub })
+    },
+    async createUser(message) {
+      logger.info("User created", { user: message.user.email })
+    },
+    async session(message) {
+      logger.debug("Session accessed", { user: message.session.user?.email })
     },
   },
 }
@@ -176,8 +256,8 @@ async function refreshAccessToken(token: JWT) {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       method: "POST",
       body: new URLSearchParams({
-        client_id: process.env.KEYCLOAK_CLIENT_ID || "",
-        client_secret: process.env.KEYCLOAK_CLIENT_SECRET || "",
+        client_id: process.env.KEYCLOAK_CLIENT_ID!,
+        client_secret: process.env.KEYCLOAK_CLIENT_SECRET!,
         grant_type: "refresh_token",
         refresh_token: token.refreshToken as string,
       }),

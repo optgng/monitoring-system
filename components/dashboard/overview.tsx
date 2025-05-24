@@ -28,4 +28,5 @@ const Overview: React.FC<OverviewProps> = ({ uid, name, description }) => {
   )
 }
 
+export { Overview }
 export default Overview

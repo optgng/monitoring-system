@@ -1,132 +1,84 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertCircle, RefreshCw, Home } from "lucide-react"
 import Link from "next/link"
-import { signIn } from "next-auth/react"
+
+const errorMessages = {
+  Configuration: "Ошибка конфигурации сервера. Обратитесь к администратору.",
+  AccessDenied: "Доступ запрещен. У вас нет прав для входа в систему.",
+  Verification: "Ошибка верификации. Попробуйте войти снова.",
+  Default: "Произошла ошибка при входе в систему.",
+  OAuthSignin: "Ошибка подключения к Keycloak. Проверьте настройки сервера.",
+  OAuthCallback: "Ошибка обратного вызова OAuth. Проверьте конфигурацию.",
+  OAuthCreateAccount: "Не удалось создать аккаунт через OAuth.",
+  EmailCreateAccount: "Не удалось создать аккаунт с email.",
+  Callback: "Ошибка callback URL.",
+  OAuthAccountNotLinked: "Аккаунт OAuth не связан с существующим аккаунтом.",
+  EmailSignin: "Ошибка входа через email.",
+  CredentialsSignin: "Неверные учетные данные.",
+  SessionRequired: "Требуется авторизация для доступа к этой странице.",
+}
 
 export default function AuthErrorPage() {
   const searchParams = useSearchParams()
-  const error = searchParams?.get("error")
-  const [isRetrying, setIsRetrying] = useState(false)
-  const [retryCount, setRetryCount] = useState(0)
-  const [errorDetails, setErrorDetails] = useState<string>("")
+  const error = searchParams.get("error") as keyof typeof errorMessages
 
-  useEffect(() => {
-    // Parse and display more user-friendly error messages
-    if (error) {
-      switch (error) {
-        case "Configuration":
-          setErrorDetails("Ошибка конфигурации аутентификации. Пожалуйста, обратитесь к администратору.")
-          break
-        case "AccessDenied":
-          setErrorDetails("Доступ запрещен. У вас нет прав для входа в систему.")
-          break
-        case "Verification":
-          setErrorDetails("Ошибка верификации. Ссылка для входа недействительна или истекла.")
-          break
-        case "OAuthSignin":
-          setErrorDetails("Ошибка при начале процесса аутентификации. Возможно, проблемы с подключением к серверу.")
-          break
-        case "OAuthCallback":
-          setErrorDetails("Ошибка при обработке ответа от сервера аутентификации.")
-          break
-        case "OAuthCreateAccount":
-          setErrorDetails("Не удалось создать учетную запись в системе аутентификации.")
-          break
-        case "EmailCreateAccount":
-          setErrorDetails("Не удалось создать учетную запись с указанным email.")
-          break
-        case "Callback":
-          setErrorDetails("Ошибка при обработке ответа от сервера аутентификации.")
-          break
-        case "OAuthAccountNotLinked":
-          setErrorDetails("Учетная запись уже связана с другим способом входа.")
-          break
-        case "EmailSignin":
-          setErrorDetails("Ошибка при отправке email для входа.")
-          break
-        case "CredentialsSignin":
-          setErrorDetails("Неверные учетные данные. Пожалуйста, проверьте логин и пароль.")
-          break
-        case "SessionRequired":
-          setErrorDetails("Для доступа к этой странице требуется вход в систему.")
-          break
-        default:
-          setErrorDetails("Произошла неизвестная ошибка при аутентификации. Пожалуйста, попробуйте снова позже.")
-      }
-    }
-  }, [error])
+  const errorMessage = errorMessages[error] || errorMessages.Default
 
-  const handleRetry = async () => {
-    setIsRetrying(true)
-    setRetryCount((prev) => prev + 1)
-
-    try {
-      await signIn("keycloak", { callbackUrl: "/" })
-    } catch (err) {
-      console.error("Error during retry:", err)
-    } finally {
-      setIsRetrying(false)
-    }
+  const handleRetry = () => {
+    window.location.href = "/login"
   }
 
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
       <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <div className="flex items-center justify-center mb-4 text-red-500">
-            <AlertCircle className="h-12 w-12" />
+        <CardHeader className="text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900">
+            <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
           </div>
-          <CardTitle className="text-2xl text-center">Ошибка аутентификации</CardTitle>
-          <CardDescription className="text-center">Произошла ошибка при попытке входа в систему</CardDescription>
+          <CardTitle className="text-xl font-semibold">Ошибка аутентификации</CardTitle>
+          <CardDescription>{errorMessage}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 p-4 rounded-md text-sm">
-            <p className="font-medium">Детали ошибки:</p>
-            <p className="mt-1">{errorDetails}</p>
-            {error === "OAuthSignin" && (
-              <p className="mt-2">
-                Возможно, сервер аутентификации недоступен или возникли проблемы с сетевым подключением.
+          {error && (
+            <div className="rounded-md bg-gray-50 dark:bg-gray-800 p-3">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Код ошибки: <code className="font-mono">{error}</code>
               </p>
-            )}
+            </div>
+          )}
+
+          <div className="flex flex-col space-y-2">
+            <Button onClick={handleRetry} className="w-full">
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Попробовать снова
+            </Button>
+
+            <Button variant="outline" asChild className="w-full">
+              <Link href="/">
+                <Home className="mr-2 h-4 w-4" />
+                На главную
+              </Link>
+            </Button>
           </div>
 
-          {retryCount > 0 && retryCount < 3 && (
-            <p className="text-sm text-center text-muted-foreground">
-              Попытка {retryCount} из 3. Если проблема повторяется, пожалуйста, обратитесь к администратору.
-            </p>
-          )}
-
-          {retryCount >= 3 && (
-            <p className="text-sm text-center text-amber-600 dark:text-amber-400">
-              Превышено количество попыток. Пожалуйста, проверьте подключение к сети или обратитесь к администратору.
-            </p>
+          {error === "OAuthSignin" && (
+            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                <strong>Возможные причины:</strong>
+              </p>
+              <ul className="text-sm text-blue-600 dark:text-blue-400 mt-1 list-disc list-inside">
+                <li>Неверные настройки Keycloak</li>
+                <li>Недоступен сервер Keycloak</li>
+                <li>Неправильный NEXTAUTH_URL</li>
+                <li>Проблемы с сетевым подключением</li>
+              </ul>
+            </div>
           )}
         </CardContent>
-        <CardFooter className="flex flex-col space-y-2">
-          {retryCount < 3 && (
-            <Button onClick={handleRetry} className="w-full" disabled={isRetrying}>
-              {isRetrying ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Повторная попытка...
-                </>
-              ) : (
-                "Попробовать снова"
-              )}
-            </Button>
-          )}
-          <Button asChild variant="outline" className="w-full">
-            <Link href="/">
-              <Home className="mr-2 h-4 w-4" />
-              Вернуться на главную
-            </Link>
-          </Button>
-        </CardFooter>
       </Card>
     </div>
   )
