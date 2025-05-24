@@ -11,9 +11,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { toast } from "@/components/ui/use-toast"
 import { PanelEditor } from "./panel-editor"
 import { Modal } from "@/components/ui/modal"
+import { VariableEditor } from "./variable-editor"
+import { AnnotationEditor } from "./annotation-editor"
 
 interface DashboardEditorProps {
   dashboardId: string | number
@@ -25,10 +26,21 @@ interface DashboardEditorProps {
 export function DashboardEditor({ dashboardId, initialData, onSave, isCreating = false }: DashboardEditorProps) {
   const [dashboard, setDashboard] = useState(initialData)
   const [isPanelModalOpen, setIsPanelModalOpen] = useState(false)
-  const [editingPanel, setEditingPanel] = useState(null)
+  const [isVariableModalOpen, setIsVariableModalOpen] = useState(false)
+  const [isAnnotationModalOpen, setIsAnnotationModalOpen] = useState(false)
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
+  const [isResultModalOpen, setIsResultModalOpen] = useState(false)
+  const [resultModal, setResultModal] = useState({ title: "", description: "", type: "success" })
+  const [editingPanel, setEditingPanel] = useState(null)
+  const [editingVariable, setEditingVariable] = useState(null)
+  const [editingAnnotation, setEditingAnnotation] = useState(null)
   const [importJson, setImportJson] = useState("")
   const router = useRouter()
+
+  const showResultModal = (title: string, description: string, type: "success" | "error" = "success") => {
+    setResultModal({ title, description, type })
+    setIsResultModalOpen(true)
+  }
 
   // Handle dashboard field changes
   const handleDashboardChange = (field: string, value: any) => {
@@ -48,32 +60,25 @@ export function DashboardEditor({ dashboardId, initialData, onSave, isCreating =
     })
   }
 
-  // Add new panel
+  // Panel management
   const handleAddPanel = () => {
     setEditingPanel(null)
     setIsPanelModalOpen(true)
   }
 
-  // Edit existing panel
   const handleEditPanel = (panel) => {
     setEditingPanel(panel)
     setIsPanelModalOpen(true)
   }
 
-  // Save panel
   const handleSavePanel = (panelData) => {
     if (editingPanel) {
-      // Update existing panel
       setDashboard((prev) => ({
         ...prev,
         panels: prev.panels.map((p) => (p.id === editingPanel.id ? { ...panelData, id: editingPanel.id } : p)),
       }))
-      toast({
-        title: "Панель обновлена",
-        description: "Панель была успешно обновлена",
-      })
+      showResultModal("Панель обновлена", "Панель была успешно обновлена")
     } else {
-      // Add new panel
       const newPanel = {
         ...panelData,
         id: Date.now(),
@@ -88,34 +93,113 @@ export function DashboardEditor({ dashboardId, initialData, onSave, isCreating =
         ...prev,
         panels: [...prev.panels, newPanel],
       }))
-      toast({
-        title: "Панель добавлена",
-        description: "Новая панель была успешно добавлена",
-      })
+      showResultModal("Панель добавлена", "Новая панель была успешно добавлена")
     }
     setIsPanelModalOpen(false)
   }
 
-  // Delete panel
   const handleDeletePanel = (panelId) => {
     setDashboard((prev) => ({
       ...prev,
       panels: prev.panels.filter((p) => p.id !== panelId),
     }))
-    toast({
-      title: "Панель удалена",
-      description: "Панель была успешно удалена",
-    })
+    showResultModal("Панель удалена", "Панель была успешно удалена")
+  }
+
+  // Variable management
+  const handleAddVariable = () => {
+    setEditingVariable(null)
+    setIsVariableModalOpen(true)
+  }
+
+  const handleEditVariable = (variable) => {
+    setEditingVariable(variable)
+    setIsVariableModalOpen(true)
+  }
+
+  const handleSaveVariable = (variableData) => {
+    if (editingVariable) {
+      setDashboard((prev) => ({
+        ...prev,
+        templating: {
+          ...prev.templating,
+          list: prev.templating.list.map((v) => (v.name === editingVariable.name ? variableData : v)),
+        },
+      }))
+      showResultModal("Переменная обновлена", "Переменная была успешно обновлена")
+    } else {
+      setDashboard((prev) => ({
+        ...prev,
+        templating: {
+          ...prev.templating,
+          list: [...(prev.templating?.list || []), variableData],
+        },
+      }))
+      showResultModal("Переменная добавлена", "Новая переменная была успешно добавлена")
+    }
+    setIsVariableModalOpen(false)
+  }
+
+  const handleDeleteVariable = (variableName) => {
+    setDashboard((prev) => ({
+      ...prev,
+      templating: {
+        ...prev.templating,
+        list: prev.templating.list.filter((v) => v.name !== variableName),
+      },
+    }))
+    showResultModal("Переменная удалена", "Переменная была успешно удалена")
+  }
+
+  // Annotation management
+  const handleAddAnnotation = () => {
+    setEditingAnnotation(null)
+    setIsAnnotationModalOpen(true)
+  }
+
+  const handleEditAnnotation = (annotation) => {
+    setEditingAnnotation(annotation)
+    setIsAnnotationModalOpen(true)
+  }
+
+  const handleSaveAnnotation = (annotationData) => {
+    if (editingAnnotation) {
+      setDashboard((prev) => ({
+        ...prev,
+        annotations: {
+          ...prev.annotations,
+          list: prev.annotations.list.map((a) => (a.name === editingAnnotation.name ? annotationData : a)),
+        },
+      }))
+      showResultModal("Аннотация обновлена", "Аннотация была успешно обновлена")
+    } else {
+      setDashboard((prev) => ({
+        ...prev,
+        annotations: {
+          ...prev.annotations,
+          list: [...(prev.annotations?.list || []), annotationData],
+        },
+      }))
+      showResultModal("Аннотация добавлена", "Новая аннотация была успешно добавлена")
+    }
+    setIsAnnotationModalOpen(false)
+  }
+
+  const handleDeleteAnnotation = (annotationName) => {
+    setDashboard((prev) => ({
+      ...prev,
+      annotations: {
+        ...prev.annotations,
+        list: prev.annotations.list.filter((a) => a.name !== annotationName),
+      },
+    }))
+    showResultModal("Аннотация удалена", "Аннотация была успешно удалена")
   }
 
   // Save dashboard
   const handleSave = () => {
     if (!dashboard.title || !dashboard.description) {
-      toast({
-        title: "Ошибка",
-        description: "Пожалуйста, заполните название и описание дашборда",
-        variant: "destructive",
-      })
+      showResultModal("Ошибка", "Пожалуйста, заполните название и описание дашборда", "error")
       return
     }
 
@@ -133,10 +217,7 @@ export function DashboardEditor({ dashboardId, initialData, onSave, isCreating =
     linkElement.setAttribute("download", exportFileDefaultName)
     linkElement.click()
 
-    toast({
-      title: "Дашборд экспортирован",
-      description: "Конфигурация дашборда была успешно экспортирована",
-    })
+    showResultModal("Дашборд экспортирован", "Конфигурация дашборда была успешно экспортирована")
   }
 
   // Import dashboard
@@ -146,16 +227,9 @@ export function DashboardEditor({ dashboardId, initialData, onSave, isCreating =
       setDashboard(importedDashboard)
       setIsImportModalOpen(false)
       setImportJson("")
-      toast({
-        title: "Дашборд импортирован",
-        description: "Конфигурация дашборда была успешно импортирована",
-      })
+      showResultModal("Дашборд импортирован", "Конфигурация дашборда была успешно импортирована")
     } catch (error) {
-      toast({
-        title: "Ошибка импорта",
-        description: "Неверный формат JSON",
-        variant: "destructive",
-      })
+      showResultModal("Ошибка импорта", "Неверный формат JSON", "error")
     }
   }
 
@@ -390,21 +464,81 @@ export function DashboardEditor({ dashboardId, initialData, onSave, isCreating =
               <CardTitle>Управление данными</CardTitle>
               <CardDescription>Настройки источников данных и переменных</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Переменные дашборда</Label>
-                <p className="text-sm text-muted-foreground">
-                  Переменные позволяют создавать интерактивные и переиспользуемые дашборды
-                </p>
-                <Button variant="outline">Добавить переменную</Button>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-base font-medium">Переменные дашборда</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Переменные позволяют создавать интерактивные и переиспользуемые дашборды
+                    </p>
+                  </div>
+                  <Button onClick={handleAddVariable}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Добавить переменную
+                  </Button>
+                </div>
+
+                {dashboard.templating?.list?.length > 0 && (
+                  <div className="space-y-2">
+                    {dashboard.templating.list.map((variable) => (
+                      <Card key={variable.name} className="p-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-medium">{variable.name}</h4>
+                            <p className="text-sm text-muted-foreground">Тип: {variable.type}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={() => handleEditVariable(variable)}>
+                              Редактировать
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => handleDeleteVariable(variable.name)}>
+                              Удалить
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              <div className="space-y-2">
-                <Label>Аннотации</Label>
-                <p className="text-sm text-muted-foreground">
-                  Аннотации отображают события на графиках в виде вертикальных линий
-                </p>
-                <Button variant="outline">Добавить аннотацию</Button>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-base font-medium">Аннотации</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Аннотации отображают события на графиках в виде вертикальных линий
+                    </p>
+                  </div>
+                  <Button onClick={handleAddAnnotation}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Добавить аннотацию
+                  </Button>
+                </div>
+
+                {dashboard.annotations?.list?.length > 0 && (
+                  <div className="space-y-2">
+                    {dashboard.annotations.list.map((annotation) => (
+                      <Card key={annotation.name} className="p-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-medium">{annotation.name}</h4>
+                            <p className="text-sm text-muted-foreground">Источник: {annotation.datasource}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={() => handleEditAnnotation(annotation)}>
+                              Редактировать
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => handleDeleteAnnotation(annotation.name)}>
+                              Удалить
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -458,6 +592,36 @@ export function DashboardEditor({ dashboardId, initialData, onSave, isCreating =
         <PanelEditor panel={editingPanel} onSave={handleSavePanel} onCancel={() => setIsPanelModalOpen(false)} />
       </Modal>
 
+      {/* Variable Editor Modal */}
+      <Modal
+        title={editingVariable ? "Редактировать переменную" : "Добавить переменную"}
+        description="Настройте параметры переменной дашборда"
+        isOpen={isVariableModalOpen}
+        onClose={() => setIsVariableModalOpen(false)}
+        className="max-w-2xl"
+      >
+        <VariableEditor
+          variable={editingVariable}
+          onSave={handleSaveVariable}
+          onCancel={() => setIsVariableModalOpen(false)}
+        />
+      </Modal>
+
+      {/* Annotation Editor Modal */}
+      <Modal
+        title={editingAnnotation ? "Редактировать аннотацию" : "Добавить аннотацию"}
+        description="Настройте параметры аннотации"
+        isOpen={isAnnotationModalOpen}
+        onClose={() => setIsAnnotationModalOpen(false)}
+        className="max-w-2xl"
+      >
+        <AnnotationEditor
+          annotation={editingAnnotation}
+          onSave={handleSaveAnnotation}
+          onCancel={() => setIsAnnotationModalOpen(false)}
+        />
+      </Modal>
+
       {/* Import Modal */}
       <Modal
         title="Импорт конфигурации дашборда"
@@ -482,6 +646,18 @@ export function DashboardEditor({ dashboardId, initialData, onSave, isCreating =
             </Button>
             <Button onClick={handleImport}>Импортировать</Button>
           </div>
+        </div>
+      </Modal>
+
+      {/* Result Modal */}
+      <Modal
+        title={resultModal.title}
+        description={resultModal.description}
+        isOpen={isResultModalOpen}
+        onClose={() => setIsResultModalOpen(false)}
+      >
+        <div className="flex justify-end">
+          <Button onClick={() => setIsResultModalOpen(false)}>ОК</Button>
         </div>
       </Modal>
     </div>

@@ -10,10 +10,12 @@ import Link from "next/link"
 import { AlertModal } from "@/components/ui/alert-modal"
 import { getCurrentUser } from "@/lib/auth"
 import { Input } from "@/components/ui/input"
-import { toast } from "@/components/ui/use-toast"
+import { Modal } from "@/components/ui/modal"
 
 export default function DashboardsPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [isResultModalOpen, setIsResultModalOpen] = useState(false)
+  const [resultModal, setResultModal] = useState({ title: "", description: "", type: "success" })
   const [selectedDashboard, setSelectedDashboard] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const router = useRouter()
@@ -76,6 +78,11 @@ export default function DashboardsPage() {
     )
   })
 
+  const showResultModal = (title: string, description: string, type: "success" | "error" = "success") => {
+    setResultModal({ title, description, type })
+    setIsResultModalOpen(true)
+  }
+
   const handleDelete = (dashboard: any) => {
     setSelectedDashboard(dashboard)
     setIsDeleteModalOpen(true)
@@ -83,12 +90,8 @@ export default function DashboardsPage() {
 
   const onDelete = () => {
     // В реальном приложении здесь был бы API-запрос на удаление
-    toast({
-      title: "Дашборд удален",
-      description: `Дашборд "${selectedDashboard.title}" был успешно удален`,
-      variant: "default",
-    })
     setIsDeleteModalOpen(false)
+    showResultModal("Дашборд удален", `Дашборд "${selectedDashboard.title}" был успешно удален`)
   }
 
   const generateReport = (dashboardId: number) => {
@@ -97,11 +100,7 @@ export default function DashboardsPage() {
 
   const handleDuplicateDashboard = (dashboard) => {
     // В реальном приложении здесь был бы API-запрос на дублирование
-    toast({
-      title: "Дашборд дублирован",
-      description: `Копия дашборда "${dashboard.title}" была успешно создана`,
-      variant: "default",
-    })
+    showResultModal("Дашборд дублирован", `Копия дашборда "${dashboard.title}" была успешно создана`)
   }
 
   const handleCreateDashboard = () => {
@@ -210,6 +209,18 @@ export default function DashboardsPage() {
         title="Удалить дашборд"
         description={`Вы уверены, что хотите удалить дашборд "${selectedDashboard?.title}"? Это действие нельзя будет отменить.`}
       />
+
+      {/* Модальное окно результата операции */}
+      <Modal
+        title={resultModal.title}
+        description={resultModal.description}
+        isOpen={isResultModalOpen}
+        onClose={() => setIsResultModalOpen(false)}
+      >
+        <div className="flex justify-end">
+          <Button onClick={() => setIsResultModalOpen(false)}>ОК</Button>
+        </div>
+      </Modal>
     </div>
   )
 }

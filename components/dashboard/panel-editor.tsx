@@ -80,6 +80,7 @@ export function PanelEditor({ panel, onSave, onCancel }: PanelEditorProps) {
               },
             ],
           },
+          unit: "short",
         },
         overrides: [],
       },
@@ -143,6 +144,62 @@ export function PanelEditor({ panel, onSave, onCancel }: PanelEditorProps) {
     }))
   }
 
+  const addThreshold = () => {
+    setPanelData((prev) => ({
+      ...prev,
+      fieldConfig: {
+        ...prev.fieldConfig,
+        defaults: {
+          ...prev.fieldConfig.defaults,
+          thresholds: {
+            ...prev.fieldConfig.defaults.thresholds,
+            steps: [
+              ...prev.fieldConfig.defaults.thresholds.steps,
+              {
+                color: "yellow",
+                value: 50,
+              },
+            ],
+          },
+        },
+      },
+    }))
+  }
+
+  const removeThreshold = (index: number) => {
+    setPanelData((prev) => ({
+      ...prev,
+      fieldConfig: {
+        ...prev.fieldConfig,
+        defaults: {
+          ...prev.fieldConfig.defaults,
+          thresholds: {
+            ...prev.fieldConfig.defaults.thresholds,
+            steps: prev.fieldConfig.defaults.thresholds.steps.filter((_, i) => i !== index),
+          },
+        },
+      },
+    }))
+  }
+
+  const updateThreshold = (index: number, field: string, value: any) => {
+    setPanelData((prev) => ({
+      ...prev,
+      fieldConfig: {
+        ...prev.fieldConfig,
+        defaults: {
+          ...prev.fieldConfig.defaults,
+          thresholds: {
+            ...prev.fieldConfig.defaults.thresholds,
+            steps: prev.fieldConfig.defaults.thresholds.steps.map((step, i) =>
+              i === index ? { ...step, [field]: value } : step,
+            ),
+          },
+        },
+      },
+    }))
+  }
+
   const handleSave = () => {
     if (!panelData.title) {
       alert("Пожалуйста, введите название панели")
@@ -157,6 +214,43 @@ export function PanelEditor({ panel, onSave, onCancel }: PanelEditorProps) {
     { value: "stat", label: "Stat" },
     { value: "piechart", label: "Pie Chart" },
     { value: "gauge", label: "Gauge" },
+  ]
+
+  const monitoringUnits = [
+    { value: "short", label: "Короткое" },
+    { value: "bytes", label: "Байты" },
+    { value: "decbytes", label: "Десятичные байты" },
+    { value: "bits", label: "Биты" },
+    { value: "decbits", label: "Десятичные биты" },
+    { value: "percent", label: "Проценты (0-100)" },
+    { value: "percentunit", label: "Проценты (0.0-1.0)" },
+    { value: "seconds", label: "Секунды" },
+    { value: "milliseconds", label: "Миллисекунды" },
+    { value: "microseconds", label: "Микросекунды" },
+    { value: "nanoseconds", label: "Наносекунды" },
+    { value: "hertz", label: "Герц (1/с)" },
+    { value: "rpm", label: "Обороты в минуту" },
+    { value: "celsius", label: "Цельсий (°C)" },
+    { value: "fahrenheit", label: "Фаренгейт (°F)" },
+    { value: "kelvin", label: "Кельвин (K)" },
+    { value: "humidity", label: "Влажность (%H)" },
+    { value: "pressure", label: "Давление (hPa)" },
+    { value: "volt", label: "Вольт" },
+    { value: "amp", label: "Ампер" },
+    { value: "watt", label: "Ватт" },
+    { value: "kwatt", label: "Киловатт" },
+    { value: "watth", label: "Ватт-час" },
+    { value: "kwatth", label: "Киловатт-час" },
+    { value: "joule", label: "Джоуль" },
+    { value: "ev", label: "Электрон-вольт" },
+    { value: "ops", label: "Операций в секунду" },
+    { value: "rps", label: "Запросов в секунду" },
+    { value: "cps", label: "Подключений в секунду" },
+    { value: "pps", label: "Пакетов в секунду" },
+    { value: "bps", label: "Бит в секунду" },
+    { value: "Bps", label: "Байт в секунду" },
+    { value: "binBps", label: "Бинарные байты в секунду" },
+    { value: "binbps", label: "Бинарные биты в секунду" },
   ]
 
   return (
@@ -298,7 +392,7 @@ export function PanelEditor({ panel, onSave, onCancel }: PanelEditorProps) {
             <CardContent className="space-y-4">
               {panelData.type === "timeseries" && (
                 <>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label>Стиль линии</Label>
                       <Select
@@ -329,48 +423,218 @@ export function PanelEditor({ panel, onSave, onCancel }: PanelEditorProps) {
                         max="10"
                       />
                     </div>
+                    <div className="space-y-2">
+                      <Label>Интерполяция</Label>
+                      <Select
+                        value={panelData.fieldConfig?.defaults?.custom?.lineInterpolation}
+                        onValueChange={(value) =>
+                          handleNestedChange(["fieldConfig", "defaults", "custom", "lineInterpolation"], value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="linear">Линейная</SelectItem>
+                          <SelectItem value="smooth">Сглаженная</SelectItem>
+                          <SelectItem value="stepBefore">Ступенчатая (до)</SelectItem>
+                          <SelectItem value="stepAfter">Ступенчатая (после)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Заливка (%)</Label>
+                      <Input
+                        type="number"
+                        value={panelData.fieldConfig?.defaults?.custom?.fillOpacity}
+                        onChange={(e) =>
+                          handleNestedChange(
+                            ["fieldConfig", "defaults", "custom", "fillOpacity"],
+                            Number(e.target.value),
+                          )
+                        }
+                        min="0"
+                        max="100"
+                        placeholder="0-100"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Размер точек</Label>
+                      <Input
+                        type="number"
+                        value={panelData.fieldConfig?.defaults?.custom?.pointSize}
+                        onChange={(e) =>
+                          handleNestedChange(["fieldConfig", "defaults", "custom", "pointSize"], Number(e.target.value))
+                        }
+                        min="1"
+                        max="20"
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Заливка</Label>
-                    <Input
-                      type="number"
-                      value={panelData.fieldConfig?.defaults?.custom?.fillOpacity}
-                      onChange={(e) =>
-                        handleNestedChange(["fieldConfig", "defaults", "custom", "fillOpacity"], Number(e.target.value))
+                    <Label>Режим стекинга</Label>
+                    <Select
+                      value={panelData.fieldConfig?.defaults?.custom?.stacking?.mode}
+                      onValueChange={(value) =>
+                        handleNestedChange(["fieldConfig", "defaults", "custom", "stacking", "mode"], value)
                       }
-                      min="0"
-                      max="100"
-                      placeholder="0-100"
-                    />
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Без стекинга</SelectItem>
+                        <SelectItem value="normal">Обычный</SelectItem>
+                        <SelectItem value="percent">Процентный</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
+
+              {panelData.type === "barchart" && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Ориентация</Label>
+                      <Select
+                        value={panelData.options?.orientation || "auto"}
+                        onValueChange={(value) => handleNestedChange(["options", "orientation"], value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto">Авто</SelectItem>
+                          <SelectItem value="horizontal">Горизонтальная</SelectItem>
+                          <SelectItem value="vertical">Вертикальная</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Выравнивание столбцов</Label>
+                      <Select
+                        value={panelData.fieldConfig?.defaults?.custom?.barAlignment?.toString() || "0"}
+                        onValueChange={(value) =>
+                          handleNestedChange(["fieldConfig", "defaults", "custom", "barAlignment"], Number(value))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="-1">Слева</SelectItem>
+                          <SelectItem value="0">По центру</SelectItem>
+                          <SelectItem value="1">Справа</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </>
               )}
 
               {panelData.type === "stat" && (
-                <div className="space-y-4">
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Ориентация</Label>
+                      <Select
+                        value={panelData.options?.orientation || "auto"}
+                        onValueChange={(value) => handleNestedChange(["options", "orientation"], value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto">Авто</SelectItem>
+                          <SelectItem value="horizontal">Горизонтальная</SelectItem>
+                          <SelectItem value="vertical">Вертикальная</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Режим цвета</Label>
+                      <Select
+                        value={panelData.options?.colorMode || "value"}
+                        onValueChange={(value) => handleNestedChange(["options", "colorMode"], value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Нет</SelectItem>
+                          <SelectItem value="value">По значению</SelectItem>
+                          <SelectItem value="background">Фон</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                   <div className="space-y-2">
-                    <Label>Ориентация</Label>
+                    <Label>Размер текста</Label>
                     <Select
-                      value={panelData.options?.orientation || "auto"}
-                      onValueChange={(value) => handleNestedChange(["options", "orientation"], value)}
+                      value={panelData.options?.textMode || "auto"}
+                      onValueChange={(value) => handleNestedChange(["options", "textMode"], value)}
                     >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="auto">Авто</SelectItem>
-                        <SelectItem value="horizontal">Горизонтальная</SelectItem>
-                        <SelectItem value="vertical">Вертикальная</SelectItem>
+                        <SelectItem value="value">Только значение</SelectItem>
+                        <SelectItem value="value_and_name">Значение и название</SelectItem>
+                        <SelectItem value="name">Только название</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
+                </>
+              )}
+
+              {panelData.type === "piechart" && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Тип отображения</Label>
+                      <Select
+                        value={panelData.options?.pieType || "pie"}
+                        onValueChange={(value) => handleNestedChange(["options", "pieType"], value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pie">Круговая</SelectItem>
+                          <SelectItem value="donut">Кольцевая</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Отображение значений</Label>
+                      <Select
+                        value={panelData.options?.displayLabels || "name"}
+                        onValueChange={(value) => handleNestedChange(["options", "displayLabels"], value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="name">Название</SelectItem>
+                          <SelectItem value="value">Значение</SelectItem>
+                          <SelectItem value="percent">Процент</SelectItem>
+                          <SelectItem value="name_value">Название и значение</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </>
               )}
 
               {panelData.type === "gauge" && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                <>
+                  <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label>Минимальное значение</Label>
                       <Input
@@ -387,8 +651,22 @@ export function PanelEditor({ panel, onSave, onCancel }: PanelEditorProps) {
                         onChange={(e) => handleNestedChange(["fieldConfig", "defaults", "max"], Number(e.target.value))}
                       />
                     </div>
+                    <div className="space-y-2">
+                      <Label>Показать пороги</Label>
+                      <Switch
+                        checked={panelData.options?.showThresholdMarkers || false}
+                        onCheckedChange={(checked) => handleNestedChange(["options", "showThresholdMarkers"], checked)}
+                      />
+                    </div>
                   </div>
-                </div>
+                  <div className="space-y-2">
+                    <Label>Показать подписи порогов</Label>
+                    <Switch
+                      checked={panelData.options?.showThresholdLabels || false}
+                      onCheckedChange={(checked) => handleNestedChange(["options", "showThresholdLabels"], checked)}
+                    />
+                  </div>
+                </>
               )}
 
               <Separator />
@@ -445,43 +723,66 @@ export function PanelEditor({ panel, onSave, onCancel }: PanelEditorProps) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="short">Короткое</SelectItem>
-                    <SelectItem value="bytes">Байты</SelectItem>
-                    <SelectItem value="percent">Проценты</SelectItem>
-                    <SelectItem value="seconds">Секунды</SelectItem>
-                    <SelectItem value="milliseconds">Миллисекунды</SelectItem>
+                    {monitoringUnits.map((unit) => (
+                      <SelectItem key={unit.value} value={unit.value}>
+                        {unit.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label>Пороговые значения</Label>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-medium">Пороговые значения</Label>
+                  <Button onClick={addThreshold} size="sm">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Добавить порог
+                  </Button>
+                </div>
                 <div className="space-y-2">
                   {panelData.fieldConfig?.defaults?.thresholds?.steps?.map((step, index) => (
                     <div key={index} className="flex items-center gap-2">
                       <Input
                         type="color"
                         value={step.color}
-                        onChange={(e) => {
-                          const newSteps = [...panelData.fieldConfig.defaults.thresholds.steps]
-                          newSteps[index].color = e.target.value
-                          handleNestedChange(["fieldConfig", "defaults", "thresholds", "steps"], newSteps)
-                        }}
+                        onChange={(e) => updateThreshold(index, "color", e.target.value)}
                         className="w-16"
                       />
                       <Input
                         type="number"
                         value={step.value || ""}
-                        onChange={(e) => {
-                          const newSteps = [...panelData.fieldConfig.defaults.thresholds.steps]
-                          newSteps[index].value = e.target.value ? Number(e.target.value) : null
-                          handleNestedChange(["fieldConfig", "defaults", "thresholds", "steps"], newSteps)
-                        }}
+                        onChange={(e) =>
+                          updateThreshold(index, "value", e.target.value ? Number(e.target.value) : null)
+                        }
                         placeholder="Значение"
+                        className="flex-1"
                       />
+                      {panelData.fieldConfig.defaults.thresholds.steps.length > 2 && (
+                        <Button variant="ghost" size="sm" onClick={() => removeThreshold(index)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Десятичные знаки</Label>
+                <Input
+                  type="number"
+                  value={panelData.fieldConfig?.defaults?.decimals || ""}
+                  onChange={(e) =>
+                    handleNestedChange(
+                      ["fieldConfig", "defaults", "decimals"],
+                      e.target.value ? Number(e.target.value) : null,
+                    )
+                  }
+                  min="0"
+                  max="10"
+                  placeholder="Авто"
+                />
               </div>
             </CardContent>
           </Card>
