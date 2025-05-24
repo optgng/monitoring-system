@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -20,12 +19,13 @@ import {
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import { PlusCircle, Search, Edit, Lock, UserCheck, UserX, RefreshCw, Loader2 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { useRouter } from "next/navigation"
 import { Modal } from "@/components/ui/modal"
+import dynamic from "next/dynamic"
 
 // Define user type
 interface User {
@@ -38,22 +38,26 @@ interface User {
   emailVerified: boolean
   createdTimestamp?: number
   roles?: string[]
-  phone?: string // Добавлено поле phone
+  phone?: string
 }
 
 // Определяем доступные роли
 const AVAILABLE_ROLES = ["admin", "manager", "support"]
 
-export default function UsersPage() {
-  const { data: session, status } = useSession()
+// Компонент для отображения содержимого страницы
+function UsersPageContent() {
+  const sessionResult = useSession()
   const { toast } = useToast()
   const router = useRouter()
+
+  // Безопасная деструктуризация с fallback значениями
+  const session = sessionResult?.data || null
+  const status = sessionResult?.status || "loading"
 
   // Users state
   const [users, setUsers] = useState<User[]>([])
   const [filteredUsers, setFilteredUsers] = useState<User[]>([])
   const [searchQuery, setSearchQuery] = useState("")
-  const [availableRoles, setAvailableRoles] = useState<string[]>(AVAILABLE_ROLES)
 
   // Loading states
   const [isLoading, setIsLoading] = useState(true)
@@ -75,7 +79,7 @@ export default function UsersPage() {
     email: "",
     password: "",
     role: "user",
-    phone: "", // Добавлено поле phone
+    phone: "",
   })
 
   const [editUser, setEditUser] = useState<User | null>(null)
@@ -94,13 +98,16 @@ export default function UsersPage() {
 
   // Fetch users
   const fetchUsers = useCallback(async () => {
-    // Проверяем, что сессия загружена и пользователь авторизован
+    // Проверяем, что сессия загружена
     if (status === "loading") return
+
+    // Если пользователь не авторизован, перенаправляем на логин
     if (status === "unauthenticated") {
       router.push("/login")
       return
     }
 
+    // Если нет данных сессии, ждем
     if (!session) return
 
     try {
@@ -122,11 +129,13 @@ export default function UsersPage() {
     } catch (error) {
       console.error("Error fetching users:", error)
       setFetchError((error as Error).message || "Не удалось загрузить список пользователей")
-      toast({
-        title: "Ошибка",
-        description: (error as Error).message || "Не удалось загрузить список пользователей",
-        variant: "destructive",
-      })
+      if (toast) {
+        toast({
+          title: "Ошибка",
+          description: (error as Error).message || "Не удалось загрузить список пользователей",
+          variant: "destructive",
+        })
+      }
       // Set empty arrays to prevent undefined errors
       setUsers([])
       setFilteredUsers([])
@@ -334,11 +343,13 @@ export default function UsersPage() {
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))
-        toast({
-          title: "Ошибка",
-          description: data.error || "Не удалось сбросить пароль",
-          variant: "destructive",
-        })
+        if (toast) {
+          toast({
+            title: "Ошибка",
+            description: data.error || "Не удалось сбросить пароль",
+            variant: "destructive",
+          })
+        }
         throw new Error(data.error || "Failed to reset password")
       }
 
@@ -349,10 +360,12 @@ export default function UsersPage() {
       // Close dialog
       setResetPasswordDialogOpen(false)
 
-      toast({
-        title: "Успех",
-        description: "Пароль успешно сброшен",
-      })
+      if (toast) {
+        toast({
+          title: "Успех",
+          description: "Пароль успешно сброшен",
+        })
+      }
     } catch (error) {
       // toast уже вызван выше, здесь можно не дублировать
     }
@@ -405,6 +418,16 @@ export default function UsersPage() {
     }
   }
 
+  // Добавить функцию для открытия диалога редактирования пользователя
+  const handleEditDialogOpen = (user: User) => {
+    setEditUser({
+      ...user,
+      phone: user.phone || "",
+    })
+    setEditUserRole(user.roles?.[0] || "user")
+    setEditDialogOpen(true)
+  }
+
   // Показываем состояние загрузки сессии
   if (status === "loading") {
     return (
@@ -442,16 +465,6 @@ export default function UsersPage() {
         </Card>
       </div>
     )
-  }
-
-  // Добавить функцию для открытия диалога редактирования пользователя
-  const handleEditDialogOpen = (user: User) => {
-    setEditUser({
-      ...user,
-      phone: user.phone || user.attributes?.phoneNumber?.[0] || user.attributes?.phone?.[0] || "",
-    })
-    setEditUserRole(user.roles?.[0] || "user")
-    setEditDialogOpen(true)
   }
 
   return (
@@ -636,7 +649,7 @@ export default function UsersPage() {
                 ))
               ) : filteredUsers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-4">
+                  <TableCell colSpan={7} className="text-center py-4">
                     {searchQuery ? "Пользователи не найдены" : "Нет доступных пользователей"}
                   </TableCell>
                 </TableRow>
@@ -848,3 +861,21 @@ export default function UsersPage() {
     </div>
   )
 }
+
+// Экспортируем компонент с динамической загрузкой для предотвращения SSR
+const UsersPage = dynamic(() => Promise.resolve(UsersPageContent), {
+  ssr: false,
+  loading: () => (
+    <div className="flex flex-col gap-4">
+      <h1 className="text-3xl font-bold tracking-tight">Управление пользователями</h1>
+      <Card className="p-6">
+        <div className="flex flex-col items-center justify-center text-center gap-4 py-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Загрузка страницы...</p>
+        </div>
+      </Card>
+    </div>
+  ),
+})
+
+export default UsersPage
