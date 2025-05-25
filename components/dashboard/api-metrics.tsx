@@ -121,13 +121,6 @@ export function ApiMetrics() {
     )
   }
 
-  const getHealthBadge = () => {
-    return metrics.healthStatus === 1 ? (
-      <Badge variant="default" className="text-xs bg-green-500">Здоровая</Badge>
-    ) : (
-      <Badge variant="destructive" className="text-xs">Проблемы</Badge>
-    )
-  }
 
   const getResponseTimeColor = () => {
     if (metrics.avgResponseTime < 500) return "text-green-600"
@@ -140,7 +133,6 @@ export function ApiMetrics() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           Статистика дашбордов
-          {getHealthBadge()}
         </CardTitle>
         <CardDescription>Метрики Grafana и системы дашбордов</CardDescription>
       </CardHeader>
