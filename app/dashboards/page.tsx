@@ -111,7 +111,7 @@ export default function DashboardsPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between p-8">
           <h1 className="text-3xl font-bold tracking-tight">Дашборды</h1>
           <Button disabled>
             <Plus className="mr-2 h-4 w-4" />

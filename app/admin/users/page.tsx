@@ -455,7 +455,7 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 p-8">
       <h1 className="text-3xl font-bold tracking-tight">Управление пользователями</h1>
       <p className="text-muted-foreground">Создание, редактирование и управление пользователями системы</p>
 
@@ -664,11 +664,10 @@ export default function UsersPage() {
                     </TableCell>
                     <TableCell>
                       <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          user.enabled
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${user.enabled
                             ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
                             : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
-                        }`}
+                          }`}
                       >
                         {user.enabled ? "Активен" : "Заблокирован"}
                       </span>

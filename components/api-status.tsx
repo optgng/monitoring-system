@@ -16,7 +16,7 @@ export function ApiStatus() {
           return
         }
 
-        const response = await fetch(`${apiUrl}/health`, {
+        const response = await fetch(`${apiUrl}/healthz`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",

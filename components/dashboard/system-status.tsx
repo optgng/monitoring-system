@@ -108,7 +108,7 @@ export function SystemStatus() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 py-2">
       {loading ? (
         <div className="flex justify-center py-10">
           <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
