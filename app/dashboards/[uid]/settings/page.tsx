@@ -20,7 +20,12 @@ export default function DashboardSettingsPage() {
     try {
       const response = await dashboardApi.getDashboard(dashboardUid)
       if (response.status === "success") {
-        setDashboard(response.data)
+        // Убеждаемся что dashboard имеет правильную структуру
+        const dashboardData = response.data as Dashboard
+        setDashboard({
+          ...dashboardData,
+          panels: dashboardData.panels || [] // Обеспечиваем наличие массива панелей
+        })
       }
     } catch (error) {
       console.error("Failed to load dashboard:", error)
@@ -46,5 +51,5 @@ export default function DashboardSettingsPage() {
     )
   }
 
-  return <DashboardEditor dashboardUid={dashboardUid} initialData={dashboard} />
+  return <DashboardEditor uid={dashboardUid} isCreating={false} />
 }

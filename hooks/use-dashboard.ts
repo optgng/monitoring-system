@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { dashboardApi, type Dashboard, type Panel } from "@/lib/dashboard-api"
 
 export function useDashboard(uid: string) {
@@ -8,7 +8,7 @@ export function useDashboard(uid: string) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const loadDashboard = useCallback(async () => {
+  const loadDashboard = async () => {
     if (!uid) return
 
     setLoading(true)
@@ -17,116 +17,64 @@ export function useDashboard(uid: string) {
     try {
       const response = await dashboardApi.getDashboard(uid)
       if (response.status === "success") {
-        setDashboard(response.data)
+        const dashboardData = response.data as Dashboard
+        // Обеспечиваем правильную структуру данных
+        setDashboard({
+          ...dashboardData,
+          panels: dashboardData.panels || [], // Гарантируем наличие массива панелей
+          tags: dashboardData.tags || [], // Гарантируем наличие массива тегов
+          templating: dashboardData.templating || { list: [] }, // Гарантируем наличие templating
+        })
       } else {
         setError(response.message || "Не удалось загрузить дашборд")
       }
     } catch (err) {
-      setError("Произошла ошибка при загрузке дашборда")
-      console.error("Failed to load dashboard:", err)
+      setError(err instanceof Error ? err.message : "Неизвестная ошибка")
     } finally {
       setLoading(false)
     }
-  }, [uid])
+  }
+
+  const createPanel = async (panelData: Partial<Panel>) => {
+    const response = await dashboardApi.createPanel(uid, panelData)
+    if (response.status === "success") {
+      await loadDashboard() // Перезагружаем дашборд
+      return response.data
+    } else {
+      throw new Error(response.message || "Не удалось создать панель")
+    }
+  }
+
+  const updatePanel = async (panelId: number, panelData: Partial<Panel>) => {
+    const response = await dashboardApi.updatePanel(uid, panelId, panelData)
+    if (response.status === "success") {
+      await loadDashboard() // Перезагружаем дашборд
+      return response.data
+    } else {
+      throw new Error(response.message || "Не удалось обновить панель")
+    }
+  }
+
+  const deletePanel = async (panelId: number) => {
+    const response = await dashboardApi.deletePanel(uid, panelId)
+    if (response.status === "success") {
+      await loadDashboard() // Перезагружаем дашборд
+    } else {
+      throw new Error(response.message || "Не удалось удалить панель")
+    }
+  }
+
+  const exportDashboard = async () => {
+    const response = await dashboardApi.exportDashboard(uid)
+    if (response.status === "success") {
+      return response.data
+    } else {
+      throw new Error(response.message || "Не удалось экспортировать дашборд")
+    }
+  }
 
   useEffect(() => {
     loadDashboard()
-  }, [loadDashboard])
-
-  const updateDashboard = useCallback(
-    async (updates: Partial<Dashboard>) => {
-      if (!uid) return
-
-      try {
-        const response = await dashboardApi.updateDashboard(uid, updates)
-        if (response.status === "success") {
-          setDashboard(response.data)
-          return response.data
-        } else {
-          throw new Error(response.message || "Не удалось обновить дашборд")
-        }
-      } catch (error) {
-        console.error("Failed to update dashboard:", error)
-        throw error
-      }
-    },
-    [uid],
-  )
-
-  const createPanel = useCallback(
-    async (panel: Partial<Panel>) => {
-      if (!uid) return
-
-      try {
-        const response = await dashboardApi.createPanel(uid, panel)
-        if (response.status === "success") {
-          await loadDashboard() // Перезагружаем дашборд
-          return response.data
-        } else {
-          throw new Error(response.message || "Не удалось создать панель")
-        }
-      } catch (error) {
-        console.error("Failed to create panel:", error)
-        throw error
-      }
-    },
-    [uid, loadDashboard],
-  )
-
-  const updatePanel = useCallback(
-    async (panelId: number, updates: Partial<Panel>) => {
-      if (!uid) return
-
-      try {
-        const response = await dashboardApi.updatePanel(uid, panelId, updates)
-        if (response.status === "success") {
-          await loadDashboard() // Перезагружаем дашборд
-          return response.data
-        } else {
-          throw new Error(response.message || "Не удалось обновить панель")
-        }
-      } catch (error) {
-        console.error("Failed to update panel:", error)
-        throw error
-      }
-    },
-    [uid, loadDashboard],
-  )
-
-  const deletePanel = useCallback(
-    async (panelId: number) => {
-      if (!uid) return
-
-      try {
-        const response = await dashboardApi.deletePanel(uid, panelId)
-        if (response.status === "success") {
-          await loadDashboard() // Перезагружаем дашборд
-          return true
-        } else {
-          throw new Error(response.message || "Не удалось удалить панель")
-        }
-      } catch (error) {
-        console.error("Failed to delete panel:", error)
-        throw error
-      }
-    },
-    [uid, loadDashboard],
-  )
-
-  const exportDashboard = useCallback(async () => {
-    if (!uid) return
-
-    try {
-      const response = await dashboardApi.exportDashboard(uid)
-      if (response.status === "success") {
-        return response.data
-      } else {
-        throw new Error(response.message || "Не удалось экспортировать дашборд")
-      }
-    } catch (error) {
-      console.error("Failed to export dashboard:", error)
-      throw error
-    }
   }, [uid])
 
   return {
@@ -134,7 +82,6 @@ export function useDashboard(uid: string) {
     loading,
     error,
     loadDashboard,
-    updateDashboard,
     createPanel,
     updatePanel,
     deletePanel,

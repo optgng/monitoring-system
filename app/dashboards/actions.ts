@@ -1,54 +1,55 @@
 "use server"
 
 import { dashboardApi } from "@/lib/dashboard-api"
-import { revalidatePath } from "next/cache"
-import type { Dashboard } from "@/lib/dashboard-api"
+import type { ApiResponse, Dashboard, DashboardListItem } from "@/lib/dashboard-api"
 
-export async function getDashboards() {
-  try {
-    const response = await dashboardApi.getDashboards()
-    return response
-  } catch (error) {
-    console.error("Failed to get dashboards:", error)
-    return { status: "error", message: "Failed to load dashboards", data: [] }
+// Обертка с повторными попытками для server actions
+async function withRetry<T>(
+  action: () => Promise<ApiResponse<T>>,
+  maxRetries: number = 2
+): Promise<ApiResponse<T>> {
+  let retries = 0
+  let lastError: Error | null = null
+
+  while (retries <= maxRetries) {
+    try {
+      return await action()
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+
+      // Если уже исчерпали все попытки, выходим из цикла
+      if (retries >= maxRetries) break
+
+      // Увеличиваем счетчик попыток и делаем паузу
+      retries++
+      await new Promise((resolve) => setTimeout(resolve, 1000 * retries))
+    }
+  }
+
+  console.error(`Server action failed after ${retries} retries:`, lastError)
+  return {
+    data: null as T,
+    status: "error",
+    message: lastError?.message || "Не удалось выполнить действие на сервере"
   }
 }
 
-export async function createDashboard(data: Partial<Dashboard>) {
-  try {
-    const response = await dashboardApi.createDashboard(data)
-    if (response.status === "success") {
-      revalidatePath("/dashboards")
-    }
-    return response
-  } catch (error) {
-    console.error("Failed to create dashboard:", error)
-    return { status: "error", message: "Failed to create dashboard" }
-  }
+export async function getDashboards(): Promise<ApiResponse<DashboardListItem[] | DashboardListItem>> {
+  return withRetry(() => dashboardApi.listDashboards())
 }
 
-export async function deleteDashboard(uid: string) {
-  try {
-    const response = await dashboardApi.deleteDashboard(uid)
-    if (response.status === "success") {
-      revalidatePath("/dashboards")
-    }
-    return response
-  } catch (error) {
-    console.error("Failed to delete dashboard:", error)
-    return { status: "error", message: "Failed to delete dashboard" }
-  }
+export async function deleteDashboard(uid: string): Promise<ApiResponse<void>> {
+  return withRetry(() => dashboardApi.deleteDashboard(uid))
 }
 
-export async function duplicateDashboard(uid: string) {
-  try {
-    const response = await dashboardApi.duplicateDashboard(uid)
-    if (response.status === "success") {
-      revalidatePath("/dashboards")
-    }
-    return response
-  } catch (error) {
-    console.error("Failed to duplicate dashboard:", error)
-    return { status: "error", message: "Failed to duplicate dashboard" }
-  }
+export async function duplicateDashboard(uid: string, newTitle?: string): Promise<ApiResponse<Dashboard>> {
+  return withRetry(() => dashboardApi.duplicateDashboard(uid, newTitle))
+}
+
+export async function createDashboard(dashboard: Partial<Dashboard>): Promise<ApiResponse<Dashboard>> {
+  return withRetry(() => dashboardApi.createDashboard(dashboard))
+}
+
+export async function updateDashboard(uid: string, dashboard: Partial<Dashboard>): Promise<ApiResponse<Dashboard>> {
+  return withRetry(() => dashboardApi.updateDashboard(uid, dashboard))
 }
