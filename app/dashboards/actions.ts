@@ -3,17 +3,19 @@
 import { dashboardApi } from "@/lib/dashboard-api"
 import type { ApiResponse, Dashboard, DashboardListItem } from "@/lib/dashboard-api"
 
-// Обертка с повторными попытками для server actions
+// Упрощаем обертку с повторными попытками - убираем дополнительный слой retry
 async function withRetry<T>(
   action: () => Promise<ApiResponse<T>>,
-  maxRetries: number = 2
+  maxRetries: number = 1 // Уменьшаем количество попыток, так как в dashboard-api уже есть retry
 ): Promise<ApiResponse<T>> {
   let retries = 0
   let lastError: Error | null = null
 
   while (retries <= maxRetries) {
     try {
-      return await action()
+      const result = await action()
+      // Если получили ответ (даже с ошибкой), возвращаем его
+      return result
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error))
 
@@ -22,7 +24,7 @@ async function withRetry<T>(
 
       // Увеличиваем счетчик попыток и делаем паузу
       retries++
-      await new Promise((resolve) => setTimeout(resolve, 1000 * retries))
+      await new Promise((resolve) => setTimeout(resolve, 500 * retries)) // Уменьшаем задержку
     }
   }
 

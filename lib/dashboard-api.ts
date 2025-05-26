@@ -109,6 +109,7 @@ export interface DashboardListItem {
   created: string
   updated: string
   panels?: Panel[] // Добавляем панели для корректного подсчета
+  panelCount?: number // Альтернативное поле для подсчета панелей
 }
 
 export interface ApiResponse<T> {
@@ -121,13 +122,36 @@ class DashboardApiService {
   private baseUrl: string
 
   constructor() {
-    // Используем переменную окружения для API дашбордов
-    this.baseUrl =
-      process.env.NEXT_PUBLIC_DASHBOARD_API_URL || "http://localhost:8050"
+    // Используем переменную окружения для API дашбордов и добавляем проверку URL
+    const configuredUrl = process.env.NEXT_PUBLIC_DASHBOARD_API_URL || "http://localhost:8050";
+
+    // Убираем trailing slash если он есть
+    this.baseUrl = configuredUrl.endsWith("/")
+      ? configuredUrl.slice(0, -1)
+      : configuredUrl;
+
+    console.log(`Dashboard API URL: ${this.baseUrl}`);
+  }
+
+  // Проверка работоспособности API - используем тот же эндпоинт что и в ApiMetrics
+  async checkHealth(): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/metrics/json`, {
+        signal: AbortSignal.timeout(5000)
+      });
+
+      return response.ok;
+    } catch (error) {
+      console.error("Health check failed:", error);
+      return false;
+    }
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`
+
+    // Убираем принудительную проверку health check в начале каждого запроса
+    // Вместо этого полагаемся на retry механизм
 
     // Получаем токен из сессии (если используется NextAuth)
     const session = typeof window !== "undefined" ? await import("next-auth/react").then((m) => m.getSession()) : null
@@ -147,13 +171,13 @@ class DashboardApiService {
       try {
         // Создаем timeout с AbortController
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // Увеличиваем таймаут до 15 секунд
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // Уменьшаем таймаут до 10 секунд
 
         const response = await fetch(url, {
           ...options,
           headers: {
             ...defaultHeaders,
-            ...(options.headers || {})  // Исправляем синтаксическую ошибку здесь
+            ...(options.headers || {})
           },
           signal: controller.signal
         });
@@ -189,7 +213,7 @@ class DashboardApiService {
 
         // Увеличиваем счетчик попыток и делаем паузу перед следующей попыткой
         retries++;
-        await new Promise(resolve => setTimeout(resolve, 2000 * retries)); // Экспоненциальная задержка
+        await new Promise(resolve => setTimeout(resolve, 1000 * retries)); // Уменьшаем задержку
         console.log(`Retry ${retries}/${maxRetries} for ${endpoint}...`);
       }
     }
@@ -201,7 +225,7 @@ class DashboardApiService {
     if (lastError) {
       if (lastError.name === "AbortError" || lastError.message.includes("timeout")) {
         errorMessage = "Превышено время ожидания ответа от сервера. Проверьте доступность сервиса дашбордов.";
-      } else if (lastError.message.includes("fetch failed")) {
+      } else if (lastError.message.includes("fetch failed") || lastError.message.includes("Failed to fetch")) {
         errorMessage = "Не удалось подключиться к сервису дашбордов. Проверьте, запущен ли сервис.";
       } else {
         errorMessage = lastError.message;
@@ -217,7 +241,43 @@ class DashboardApiService {
 
   // Dashboard methods
   async listDashboards(): Promise<ApiResponse<DashboardListItem[]>> {
-    return this.request<DashboardListItem[]>("/api/")
+    const response = await this.request<DashboardListItem[]>("/api/")
+
+    // Если получили успешный ответ, обогащаем данные панелями
+    if (response.status === "success" && Array.isArray(response.data)) {
+      const enrichedDashboards = await Promise.all(
+        response.data.map(async (dashboard) => {
+          try {
+            // Получаем полные данные дашборда для подсчета панелей
+            const fullDashboardResponse = await this.getDashboard(dashboard.uid)
+            if (fullDashboardResponse.status === "success" && fullDashboardResponse.data) {
+              const fullDashboard = fullDashboardResponse.data as Dashboard
+              return {
+                ...dashboard,
+                panels: fullDashboard.panels || [],
+                panelCount: (fullDashboard.panels || []).length
+              }
+            }
+          } catch (error) {
+            console.warn(`Failed to get panels for dashboard ${dashboard.uid}:`, error)
+          }
+
+          // Возвращаем исходный дашборд если не удалось получить панели
+          return {
+            ...dashboard,
+            panels: [],
+            panelCount: 0
+          }
+        })
+      )
+
+      return {
+        ...response,
+        data: enrichedDashboards
+      }
+    }
+
+    return response
   }
 
   async getDashboard(uid?: string): Promise<ApiResponse<Dashboard | DashboardListItem[]>> {
@@ -420,7 +480,6 @@ class DashboardApiService {
       method: "DELETE",
     })
   }
-
   // Metrics methods
   async getMetrics(): Promise<ApiResponse<string>> {
     return this.request<string>("/api/metrics")
@@ -432,6 +491,53 @@ class DashboardApiService {
 
   async getMetricsSummary(): Promise<ApiResponse<any>> {
     return this.request<any>("/api/metrics/summary")
+  }
+
+  // PromQL Helper methods (новые эндпоинты)
+  async validatePromQL(query: string): Promise<ApiResponse<{ valid: boolean, query: string, warnings: string[] }>> {
+    return this.request<{ valid: boolean, query: string, warnings: string[] }>("/api/promql/validate", {
+      method: "POST",
+      body: JSON.stringify({ query }),
+    })
+  }
+
+
+  async getPromQLExamples(): Promise<ApiResponse<Array<{ category: string, examples: Array<{ title: string, query: string, legend: string, description: string }> }>>> {
+    return this.request<Array<{ category: string, examples: Array<{ title: string, query: string, legend: string, description: string }> }>>("/api/promql/examples")
+  }
+
+  async getPanelTemplate(type: string): Promise<ApiResponse<any>> {
+    return this.request<any>(`/api/promql/templates/${type}`)
+  }
+
+  // Расширенные методы для дашбордов с фильтрацией
+  async listDashboardsWithFilters(filters: {
+    tag?: string
+    search?: string
+    starred?: boolean
+    limit?: number
+  } = {}): Promise<ApiResponse<DashboardListItem[]>> {
+    const params = new URLSearchParams()
+
+    if (filters.tag) params.append('tag', filters.tag)
+    if (filters.search) params.append('search', filters.search)
+    if (filters.starred !== undefined) params.append('starred', filters.starred.toString())
+    if (filters.limit) params.append('limit', filters.limit.toString())
+
+    const endpoint = params.toString() ? `/api/?${params.toString()}` : "/api/"
+    return this.request<DashboardListItem[]>(endpoint)
+  }
+
+  // Улучшенный метод импорта дашборда
+  async importDashboardFromFile(file: File): Promise<ApiResponse<Dashboard>> {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    return this.request<Dashboard>("/api/import", {
+      method: "POST",
+      body: formData,
+      headers: {} // Убираем Content-Type для FormData
+    })
   }
 }
 

@@ -64,7 +64,7 @@ export default function ReportsPage() {
     }, 2000)
   }
 
-  const handleExport = (report) => {
+  const handleExport = (report: any) => {
     setSelectedReport(report)
     setIsExportModalOpen(true)
   }

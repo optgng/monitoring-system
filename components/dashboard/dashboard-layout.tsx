@@ -1,10 +1,9 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Save, RotateCcw, Settings, FileText, Eye, EyeOff, Share2 } from "lucide-react"
+import { Save, RotateCcw, Settings, Eye, EyeOff, Share2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PanelManager, type PanelProps } from "@/components/dashboard/panel-manager"
 import { getCurrentUser } from "@/lib/auth"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -29,16 +28,24 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ dashboardId, initialData, onSave, readOnly = false }: DashboardLayoutProps) {
   const [dashboard, setDashboard] = useState<DashboardData>(
     initialData || {
-      id: dashboardId,
-      title: "Новый дашборд",
+      id: dashboardId, title: "Новый дашборд",
       description: "Описание дашборда",
       panels: [],
     },
-  )
+  );
+
   const [isEditing, setIsEditing] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
+  const [userRole, setUserRole] = useState<string>("viewer")
   const router = useRouter()
-  const userRole = getCurrentUser().role
+
+  useEffect(() => {
+    async function loadUserRole() {
+      const user = await getCurrentUser()
+      setUserRole(user?.role || "viewer")
+    }
+    loadUserRole()
+  }, [])
 
   const canEdit = (userRole === "admin" || userRole === "manager") && !readOnly
   const canGenerateReport = userRole === "admin" || userRole === "manager"
@@ -91,13 +98,6 @@ export function DashboardLayout({ dashboardId, initialData, onSave, readOnly = f
           <p className="text-muted-foreground">{dashboard.description}</p>
         </div>
         <div className="flex gap-2">
-          {canGenerateReport && (
-            <Button onClick={generateReport}>
-              <FileText className="mr-2 h-4 w-4" />
-              Сформировать отчет
-            </Button>
-          )}
-
           {canEdit && (
             <>
               <Button variant={isEditing ? "default" : "outline"} onClick={toggleEditMode}>
@@ -152,42 +152,15 @@ export function DashboardLayout({ dashboardId, initialData, onSave, readOnly = f
         </div>
       )}
 
-      <Tabs defaultValue="panels" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="panels">Панели</TabsTrigger>
-          <TabsTrigger value="data">Данные</TabsTrigger>
-          {isEditing && <TabsTrigger value="layout">Макет</TabsTrigger>}
-        </TabsList>
-
-        <TabsContent value="panels" className="space-y-4">
-          <PanelManager
-            dashboardId={dashboardId}
-            initialPanels={dashboard.panels}
-            onPanelsChange={handlePanelsChange}
-            readOnly={!isEditing}
-          />
-        </TabsContent>
-
-        <TabsContent value="data" className="space-y-4">
-          <Card className="p-6">
-            <h3 className="text-lg font-medium mb-4">Источники данных</h3>
-            <p className="text-muted-foreground">
-              Здесь будет отображаться информация об источниках данных, используемых в дашборде.
-            </p>
-          </Card>
-        </TabsContent>
-
-        {isEditing && (
-          <TabsContent value="layout" className="space-y-4">
-            <Card className="p-6">
-              <h3 className="text-lg font-medium mb-4">Настройка макета</h3>
-              <p className="text-muted-foreground">
-                Здесь будут инструменты для настройки расположения панелей на дашборде.
-              </p>
-            </Card>
-          </TabsContent>
-        )}
-      </Tabs>
+      {/* Показываем панели напрямую без табов */}
+      <div className="space-y-4">
+        <PanelManager
+          dashboardId={dashboardId}
+          initialPanels={dashboard.panels}
+          onPanelsChange={handlePanelsChange}
+          readOnly={!isEditing}
+        />
+      </div>
     </div>
   )
 }

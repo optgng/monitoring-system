@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { authOptions } from "@/lib/auth-config"
 import { logger } from "@/lib/logger"
 import { keycloakService } from "@/lib/keycloak"
 import { profileCache } from "@/lib/cache"

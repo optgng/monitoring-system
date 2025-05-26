@@ -1,35 +1,34 @@
 // Предопределенные цвета в формате HEX с соответствующими цветами текста
 export const TAG_COLORS = [
-  { bg: "#3b82f6", text: "#ffffff" }, // blue-500
-  { bg: "#22c55e", text: "#ffffff" }, // green-500
-  { bg: "#ef4444", text: "#ffffff" }, // red-500
-  { bg: "#ca8a04", text: "#ffffff" }, // yellow-600
-  { bg: "#a855f7", text: "#ffffff" }, // purple-500
-  { bg: "#ec4899", text: "#ffffff" }, // pink-500
-  { bg: "#6366f1", text: "#ffffff" }, // indigo-500
-  { bg: "#0891b2", text: "#ffffff" }, // cyan-600
-  { bg: "#14b8a6", text: "#ffffff" }, // teal-500
-  { bg: "#f97316", text: "#ffffff" }, // orange-500
-  { bg: "#65a30d", text: "#ffffff" }, // lime-600
-  { bg: "#059669", text: "#ffffff" }, // emerald-600
-  { bg: "#e11d48", text: "#ffffff" }, // rose-600
-  { bg: "#0284c7", text: "#ffffff" }, // sky-600
-  { bg: "#c026d3", text: "#ffffff" }, // fuchsia-600
-  { bg: "#d97706", text: "#ffffff" }, // amber-600
-  { bg: "#7c3aed", text: "#ffffff" }, // violet-600
-  { bg: "#2563eb", text: "#ffffff" }, // blue-600
-  { bg: "#16a34a", text: "#ffffff" }, // green-600
-  { bg: "#dc2626", text: "#ffffff" }, // red-600
-  { bg: "#9333ea", text: "#ffffff" }, // purple-600
-  { bg: "#db2777", text: "#ffffff" }, // pink-600
-  { bg: "#4f46e5", text: "#ffffff" }, // indigo-600
-  { bg: "#0e7490", text: "#ffffff" }, // cyan-700
-  { bg: "#0d9488", text: "#ffffff" }, // teal-600
-  { bg: "#ea580c", text: "#ffffff" }, // orange-600
-  { bg: "#4d7c0f", text: "#ffffff" }, // lime-700
-  { bg: "#047857", text: "#ffffff" }, // emerald-700
-  { bg: "#be123c", text: "#ffffff" }, // rose-700
-  { bg: "#0369a1", text: "#ffffff" }  // sky-700
+  { bg: "#3b82f6", text: "#ffffff", border: "#2563eb" }, // blue-500
+  { bg: "#22c55e", text: "#ffffff", border: "#16a34a" }, // green-500
+  { bg: "#ef4444", text: "#ffffff", border: "#dc2626" }, // red-500
+  { bg: "#ca8a04", text: "#ffffff", border: "#a16207" }, // yellow-600
+  { bg: "#a855f7", text: "#ffffff", border: "#9333ea" }, // purple-500
+  { bg: "#ec4899", text: "#ffffff", border: "#db2777" }, // pink-500
+  { bg: "#6366f1", text: "#ffffff", border: "#4f46e5" }, // indigo-500
+  { bg: "#0891b2", text: "#ffffff", border: "#0e7490" }, // cyan-600  { bg: "#14b8a6", text: "#ffffff", border: "#0d9488" }, // teal-500
+  { bg: "#f97316", text: "#ffffff", border: "#ea580c" }, // orange-500
+  { bg: "#65a30d", text: "#ffffff", border: "#4d7c0f" }, // lime-600
+  { bg: "#059669", text: "#ffffff", border: "#047857" }, // emerald-600
+  { bg: "#e11d48", text: "#ffffff", border: "#be123c" }, // rose-600
+  { bg: "#0284c7", text: "#ffffff", border: "#0369a1" }, // sky-600
+  { bg: "#c026d3", text: "#ffffff", border: "#a21caf" }, // fuchsia-600
+  { bg: "#d97706", text: "#ffffff", border: "#b45309" }, // amber-600
+  { bg: "#7c3aed", text: "#ffffff", border: "#6d28d9" }, // violet-600
+  { bg: "#2563eb", text: "#ffffff", border: "#1d4ed8" }, // blue-600
+  { bg: "#16a34a", text: "#ffffff", border: "#15803d" }, // green-600
+  { bg: "#dc2626", text: "#ffffff", border: "#b91c1c" }, // red-600
+  { bg: "#9333ea", text: "#ffffff", border: "#7c2d12" }, // purple-600
+  { bg: "#db2777", text: "#ffffff", border: "#be185d" }, // pink-600
+  { bg: "#4f46e5", text: "#ffffff", border: "#4338ca" }, // indigo-600
+  { bg: "#0e7490", text: "#ffffff", border: "#155e75" }, // cyan-700
+  { bg: "#0d9488", text: "#ffffff", border: "#0f766e" }, // teal-600
+  { bg: "#ea580c", text: "#ffffff", border: "#c2410c" }, // orange-600
+  { bg: "#4d7c0f", text: "#ffffff", border: "#365314" }, // lime-700
+  { bg: "#047857", text: "#ffffff", border: "#064e3b" }, // emerald-700
+  { bg: "#be123c", text: "#ffffff", border: "#9f1239" }, // rose-700
+  { bg: "#0369a1", text: "#ffffff", border: "#075985" }  // sky-700
 ];
 
 // Кеш для консистентного отображения тегов
@@ -123,4 +122,20 @@ export function getAllTagsWithColors(tags: string[]): { tag: string; color: type
     tag,
     color: getTagColor(tag)
   }));
+}
+
+/**
+ * Возвращает цвет тега с пресетами (alias для getTagColor)
+ */
+export function getTagColorWithPresets(tag: string): typeof TAG_COLORS[0] {
+  return getTagColor(tag);
+}
+
+/**
+ * Возвращает CSS классы для hover эффекта тега
+ */
+export function getTagHoverClass(tag: string): string {
+  const color = getTagColor(tag);
+  // Возвращаем базовые классы для hover эффекта
+  return "hover:opacity-80 transition-opacity duration-200";
 }

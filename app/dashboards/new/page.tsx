@@ -1,7 +1,11 @@
 "use client"
 
-import { DashboardEditor } from "@/components/dashboard/dashboard-editor"
+import { EnhancedDashboardEditor } from "@/components/dashboard/enhanced-dashboard-editor"
 
 export default function NewDashboardPage() {
-  return <DashboardEditor isCreating={true} />
+  return (
+    <div className="container mx-auto py-6">
+      <EnhancedDashboardEditor isCreating={true} />
+    </div>
+  )
 }

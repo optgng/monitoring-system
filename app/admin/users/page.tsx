@@ -269,16 +269,26 @@ export default function UsersPage() {
       setResultModalContent({ title: "Ошибка", description: "Пользователь не выбран" })
       setShowResultModal(true)
       return
+    } const role = AVAILABLE_ROLES.includes(editUserRole) ? editUserRole : AVAILABLE_ROLES[0]
+
+    // Создаем объект нужного формата для validateUserForm
+    const userFormData = {
+      username: editUser.username || "",
+      firstName: editUser.firstName || "",
+      lastName: editUser.lastName || "",
+      email: editUser.email || "",
+      password: "",
+      role: role,
+      phone: editUser.phone || ""
     }
 
-    const errors = validateUserForm({ ...editUser, password: "" })
+    const errors = validateUserForm(userFormData)
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors)
       return
     }
     try {
       setIsUpdatingUser(true)
-      const role = AVAILABLE_ROLES.includes(editUserRole) ? editUserRole : AVAILABLE_ROLES[0]
 
       const response = await fetch(`/api/admin/users/${editUser.id}`, {
         method: "PUT",
@@ -443,12 +453,11 @@ export default function UsersPage() {
       </div>
     )
   }
-
   // Добавить функцию для открытия диалога редактирования пользователя
-  const handleEditDialogOpen = (user: User) => {
+  const handleEditDialogOpen = (user: User & { attributes?: { phoneNumber?: string[], phone?: string[] } }) => {
     setEditUser({
       ...user,
-      phone: user.phone || user.attributes?.phoneNumber?.[0] || user.attributes?.phone?.[0] || "",
+      phone: user.phone || "",
     })
     setEditUserRole(user.roles?.[0] || "user")
     setEditDialogOpen(true)
@@ -665,8 +674,8 @@ export default function UsersPage() {
                     <TableCell>
                       <span
                         className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${user.enabled
-                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
-                            : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
+                          ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
+                          : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
                           }`}
                       >
                         {user.enabled ? "Активен" : "Заблокирован"}

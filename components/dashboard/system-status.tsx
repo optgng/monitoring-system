@@ -7,7 +7,7 @@ import { Loader2, CheckCircle2, AlertTriangle, XCircle } from "lucide-react"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://monitoring-service.localhost:8000"
 
-type Device = {
+interface Device {
   id: string
   name: string
   system_name: string
@@ -16,17 +16,17 @@ type Device = {
   status?: "online" | "offline"
 }
 
-type SystemGroup = {
+interface SystemGroup {
   system_name: string
   devices: Device[]
   status: "operational" | "degraded" | "outage"
 }
 
-function getDeviceStatusIcon(status: string) {
+function getDeviceStatusIcon(status?: string) {
   if (status === "online") {
-    return <CheckCircle2 className="text-green-500 h-5 w-5" title="В сети" />
+    return <CheckCircle2 className="text-green-500 h-5 w-5" aria-label="В сети" />
   }
-  return <XCircle className="text-red-500 h-5 w-5" title="Не в сети" />
+  return <XCircle className="text-red-500 h-5 w-5" aria-label="Не в сети" />
 }
 
 export function SystemStatus() {
@@ -76,15 +76,14 @@ export function SystemStatus() {
     }
     fetchData()
   }, [])
-
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "operational":
-        return <CheckCircle2 className="h-5 w-5 text-green-500" />
+        return <CheckCircle2 className="h-5 w-5 text-green-500" aria-label="Работает" />
       case "degraded":
-        return <AlertTriangle className="h-5 w-5 text-yellow-500" />
+        return <AlertTriangle className="h-5 w-5 text-yellow-500" aria-label="Частично работает" />
       case "outage":
-        return <XCircle className="h-5 w-5 text-red-500" />
+        return <XCircle className="h-5 w-5 text-red-500" aria-label="Проблемы" />
       default:
         return null
     }

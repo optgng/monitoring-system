@@ -8,7 +8,7 @@ import { ArrowLeft, Edit, Eye, RefreshCw } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { dashboardApi } from "@/lib/dashboard-api"
 import type { Dashboard } from "@/lib/dashboard-api"
-import { getTagBadgeClass } from "@/lib/tag-colors"
+import { getTagStyle } from "@/lib/tag-colors"
 
 interface DashboardViewerProps {
   uid: string
@@ -86,20 +86,19 @@ export function DashboardViewer({ uid }: DashboardViewerProps) {
             <RefreshCw className="mr-2 h-4 w-4" />
             Обновить
           </Button>
-          <Button onClick={() => router.push(`/dashboards/${uid}/edit`)}>
+          <Button onClick={() => router.push(`/dashboards/${uid}/panels`)}>
             <Edit className="mr-2 h-4 w-4" />
-            Редактировать
+            Управление панелями
           </Button>
         </div>
       </div>
-
       {dashboard.tags && dashboard.tags.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {dashboard.tags.map(tag => (
             <Badge
               key={tag}
               variant="outline"
-              className={getTagBadgeClass(tag)}
+              style={getTagStyle(tag)}
             >
               {tag}
             </Badge>
@@ -107,7 +106,8 @@ export function DashboardViewer({ uid }: DashboardViewerProps) {
         </div>
       )}
 
-      <div className="grid gap-6">
+      {/* Убираем табы и показываем панели напрямую */}
+      <div className="space-y-6">
         {dashboard.panels && dashboard.panels.length > 0 ? (
           dashboard.panels.map(panel => (
             <Card key={panel.id}>

@@ -63,7 +63,7 @@ export function DashboardEditor({ uid, isCreating = false }: DashboardEditorProp
         timeTo: dashboard.time?.to || "now",
         editable: dashboard.editable !== false,
         hideControls: dashboard.hideControls || false,
-        allowDeletion: true,
+        allowDeletion: dashboard.allowDeletion !== false,
       })
     }
   }, [dashboard, isCreating])

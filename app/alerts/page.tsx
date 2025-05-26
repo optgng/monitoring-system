@@ -94,8 +94,7 @@ export default function AlertsPage() {
       : selectedTab === "active"
         ? alerts.filter((alert) => alert.status === "active")
         : alerts.filter((alert) => alert.status === "resolved")
-
-  const getAlertIcon = (severity) => {
+  const getAlertIcon = (severity: string) => {
     switch (severity) {
       case "critical":
         return <AlertTriangle className="h-5 w-5 text-red-500" />
@@ -108,7 +107,7 @@ export default function AlertsPage() {
     }
   }
 
-  const getStatusIcon = (status) => {
+  const getStatusIcon = (status: string) => {
     return status === "resolved" ? (
       <CheckCircle2 className="h-5 w-5 text-green-500" />
     ) : (

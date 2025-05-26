@@ -1,11 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { authOptions } from "@/lib/auth-config"
 import { keycloakService } from "@/lib/keycloak-service"
 import { logger } from "@/lib/logger"
 
 // POST enable/disable user
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
+  const userId = resolvedParams.id
+
   try {
     const session = await getServerSession(authOptions)
 
@@ -16,8 +19,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // Check if user has admin role
     // In a real app, you would check for admin permissions here
-
-    const userId = params.id
     const { enabled } = await req.json()
 
     // Prevent disabling yourself
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    logger.error(`Error toggling user ${params.id} status`, error)
+    logger.error(`Error toggling user ${userId} status`, error)
     return NextResponse.json({ error: (error as Error).message || "Failed to update user status" }, { status: 500 })
   }
 }

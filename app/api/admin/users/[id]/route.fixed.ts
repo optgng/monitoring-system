@@ -24,7 +24,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     let phone = ""
     if (user.attributes && user.attributes.phoneNumber && Array.isArray(user.attributes.phoneNumber)) {
       phone = user.attributes.phoneNumber[0]
-    } return NextResponse.json({ ...user, phone })
+    }
+
+    return NextResponse.json({ ...user, phone })
   } catch (error) {
     const resolvedParams = await params
     logger.error(`Error fetching user ${resolvedParams.id}`, error)
@@ -34,9 +36,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 // PUT update user
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = await params
-  const userId = resolvedParams.id
-
   try {
     const session = await getServerSession(authOptions)
 
@@ -46,6 +45,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // Check if user has admin role
     // In a real app, you would check for admin permissions here
+
+    const resolvedParams = await params
+    const userId = resolvedParams.id
     const data = await req.json()
 
     // Validate input
@@ -101,18 +103,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         logger.info(`Removing role ${role} from user ${userId}`)
         await keycloakService.removeRealmRoleFromUser(userId, role)
       }
-    } return NextResponse.json({ success: true })
+    }
+
+    return NextResponse.json({ success: true })
   } catch (error) {
-    logger.error(`Error updating user ${userId}`, error)
+    const resolvedParams = await params
+    logger.error(`Error updating user ${resolvedParams.id}`, error)
     return NextResponse.json({ error: (error as Error).message || "Failed to update user" }, { status: 500 })
   }
 }
 
 // DELETE user
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = await params
-  const userId = resolvedParams.id
-
   try {
     const session = await getServerSession(authOptions)
 
@@ -123,6 +125,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     // Check if user has admin role
     // In a real app, you would check for admin permissions here
 
+    const resolvedParams = await params
+    const userId = resolvedParams.id
+
     // Prevent deleting yourself
     if (userId === session.user.id) {
       return NextResponse.json({ error: "Cannot delete your own account" }, { status: 400 })
@@ -132,7 +137,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    logger.error(`Error deleting user ${userId}`, error)
+    const resolvedParams = await params
+    logger.error(`Error deleting user ${resolvedParams.id}`, error)
     return NextResponse.json({ error: "Failed to delete user" }, { status: 500 })
   }
 }

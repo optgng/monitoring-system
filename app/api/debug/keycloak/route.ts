@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { authOptions } from "@/lib/auth-config"
 import { keycloakService } from "@/lib/keycloak-service"
 import { logger } from "@/lib/logger"
 
@@ -24,16 +24,8 @@ export async function GET(req: NextRequest) {
     const sessionInfo = {
       user: session.user,
       hasAccessToken: !!session.accessToken,
-    }
-
-    // Test admin token
-    let adminTokenTest = "failed"
-    try {
-      await keycloakService.getAdminToken()
-      adminTokenTest = "success"
-    } catch (error) {
-      adminTokenTest = `failed: ${(error as Error).message}`
-    }
+    }    // Test admin token (internal test)
+    let adminTokenTest = "skipped (internal method)"
 
     // Test user profile fetch
     let userProfileTest = "failed"

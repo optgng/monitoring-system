@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Activity, Clock, Database, Users, Loader2 } from "lucide-react"
 
-const API_URL = process.env.NEXT_PUBLIC_DASHBOARD_API_URL || "http://dashboards-service.localhost:8050"
+const API_URL = process.env.NEXT_PUBLIC_DASHBOARD_API_URL || "http://localhost:8050"
 
 interface ApiMetrics {
   total_dashboards: number

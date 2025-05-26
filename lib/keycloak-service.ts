@@ -60,22 +60,33 @@ export class KeycloakService {
   private readonly clientSecret: string
   private adminToken: string | null = null
   private adminTokenExpiry = 0
+  constructor(
+    keycloakHost?: string,
+    realm?: string,
+    clientId?: string,
+    clientSecret?: string,
+    issuerUrl?: string
+  ) {
+    this.keycloakHost = keycloakHost || process.env.KEYCLOAK_HOST || ""
 
-  constructor() {
-    this.keycloakHost = process.env.KEYCLOAK_HOST || ""
-    // Extract realm from the issuer URL
-    const issuerUrl = process.env.KEYCLOAK_ISSUER || ""
-    this.realm = issuerUrl.split("/realms/")[1] || "monitoring"
-    this.clientId = process.env.KEYCLOAK_CLIENT_ID || ""
-    this.clientSecret = process.env.KEYCLOAK_CLIENT_SECRET || ""
+    // Если передан напрямую realm, используем его, иначе извлекаем из issuerUrl
+    if (realm) {
+      this.realm = realm
+    } else {
+      // Extract realm from the issuer URL
+      const issuer = issuerUrl || process.env.KEYCLOAK_ISSUER || ""
+      this.realm = issuer.split("/realms/")[1] || "monitoring"
+    }
+
+    this.clientId = clientId || process.env.KEYCLOAK_CLIENT_ID || ""
+    this.clientSecret = clientSecret || process.env.KEYCLOAK_CLIENT_SECRET || ""
 
     logger.info(`Initialized KeycloakService with realm: ${this.realm}, clientId: ${this.clientId}`)
   }
 
   /**
    * Get an admin token for Keycloak API operations
-   */
-  private async getAdminToken(): Promise<string> {
+   */  private async getAdminToken(): Promise<string | null> {
     // Check if we have a valid token
     if (this.adminToken && Date.now() < this.adminTokenExpiry) {
       return this.adminToken
@@ -167,14 +178,17 @@ export class KeycloakService {
     try {
       // Determine which token to use
       let token: string
-
       if (userToken) {
         // Use the provided user token
         token = userToken
         logger.info(`Using provided user token for request to ${endpoint}`)
       } else {
         // Get admin token
-        token = await this.getAdminToken()
+        const adminToken = await this.getAdminToken()
+        if (!adminToken) {
+          throw new Error("Failed to get admin token")
+        }
+        token = adminToken
         logger.info(`Using admin token for request to ${endpoint}`)
       }
 
@@ -208,9 +222,9 @@ export class KeycloakService {
           errorData = text
             ? JSON.parse(text)
             : {
-                error: `HTTP Error ${response.status}`,
-                error_description: response.statusText,
-              }
+              error: `HTTP Error ${response.status}`,
+              error_description: response.statusText,
+            }
         } catch (e) {
           errorData = {
             error: `HTTP Error ${response.status}`,

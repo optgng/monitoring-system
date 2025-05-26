@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -15,14 +15,26 @@ import { useRouter } from "next/navigation"
 
 export function RoleSwitcher() {
   const router = useRouter()
-  const [currentRole, setCurrentRole] = useState<UserRole>(getCurrentUser().role)
+  const [currentRole, setCurrentRole] = useState<UserRole>("user")
 
-  const switchRole = (role: UserRole) => {
-    const user = getCurrentUser()
-    const newUser: User = { ...user, role }
-    setCurrentUser(newUser)
-    setCurrentRole(role)
-    router.refresh()
+  useEffect(() => {
+    const loadUserRole = async () => {
+      const user = await getCurrentUser()
+      if (user) {
+        setCurrentRole(user.role)
+      }
+    }
+
+    loadUserRole()
+  }, [])
+  const switchRole = async (role: UserRole) => {
+    const user = await getCurrentUser()
+    if (user) {
+      const newUser: User = { ...user, role }
+      setCurrentUser(newUser)
+      setCurrentRole(role)
+      router.refresh()
+    }
   }
 
   return (

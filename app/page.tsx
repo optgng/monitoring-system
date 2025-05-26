@@ -15,7 +15,7 @@ export default function Home() {
           <TabsTrigger value="status">Статус систем</TabsTrigger>
         </TabsList>
         <TabsContent value="overview" className="space-y-4">
-          <Overview />
+          <Overview uid={""} name={""} description={""} />
         </TabsContent>
         <TabsContent value="alerts" className="space-y-4">
           <RecentAlerts />

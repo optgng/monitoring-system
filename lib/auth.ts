@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth/next"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { authOptions } from "@/lib/auth-config"
 
 export type UserRole = "admin" | "manager" | "support" | "user"
 
@@ -29,14 +29,13 @@ export async function getCurrentUser(): Promise<User | null> {
   } else if (session.user.roles.includes("support")) {
     primaryRole = "support"
   }
-
   return {
     id: session.user.id || "",
     name: session.user.name || "",
     email: session.user.email || "",
     role: primaryRole,
     roles: session.user.roles || [],
-    avatar: session.user.image,
+    avatar: session.user.image || undefined,
   }
 }
 
