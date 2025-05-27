@@ -16,8 +16,22 @@ export function useDashboard(uid: string) {
 
     try {
       const response = await dashboardApi.getDashboard(uid)
+      console.log('Полученный ответ от getDashboard:', response); // Для отладки
+
       if (response.status === "success") {
-        const dashboardData = response.data as Dashboard
+        // Правильно обрабатываем структуру ответа API
+        // В зависимости от API, данные могут быть в response.data или в response.data.dashboard
+        let dashboardData: Dashboard;
+
+        // Проверяем, есть ли поле dashboard в response.data (а не в типе Dashboard)
+        if ((response.data as any).dashboard) {
+          // Если данные вложены в поле dashboard
+          dashboardData = (response.data as any).dashboard;
+        } else {
+          // Если данные находятся прямо в поле data
+          dashboardData = response.data;
+        }
+
         // Обеспечиваем правильную структуру данных
         setDashboard({
           ...dashboardData,
@@ -27,8 +41,10 @@ export function useDashboard(uid: string) {
         })
       } else {
         setError(response.message || "Не удалось загрузить дашборд")
+        console.error("Ошибка загрузки дашборда:", response.message);
       }
     } catch (err) {
+      console.error("Ошибка при загрузке дашборда:", err);
       setError(err instanceof Error ? err.message : "Неизвестная ошибка")
     } finally {
       setLoading(false)
@@ -36,7 +52,35 @@ export function useDashboard(uid: string) {
   }
 
   const createPanel = async (panelData: Partial<Panel>) => {
-    const response = await dashboardApi.createPanel(uid, panelData)
+    // Убедимся, что у панели есть все необходимые поля
+    const completePanel: Partial<Panel> = {
+      ...panelData,
+      // Добавим datasource, если он отсутствует
+      datasource: panelData.datasource || {
+        type: "prometheus",
+        uid: "prometheus",
+      },
+      // Убедимся, что у targets есть datasource
+      targets:
+        panelData.targets?.map((target) => ({
+          ...target,
+          datasource: target.datasource || {
+            type: "prometheus",
+            uid: "prometheus",
+          },
+        })) || [
+          {
+            refId: "A",
+            expr: "",
+            datasource: {
+              type: "prometheus",
+              uid: "prometheus",
+            },
+          },
+        ],
+    }
+
+    const response = await dashboardApi.createPanel(uid, completePanel)
     if (response.status === "success") {
       await loadDashboard() // Перезагружаем дашборд
       return response.data
@@ -46,7 +90,17 @@ export function useDashboard(uid: string) {
   }
 
   const updatePanel = async (panelId: number, panelData: Partial<Panel>) => {
-    const response = await dashboardApi.updatePanel(uid, panelId, panelData)
+    // Убедимся, что у панели есть все необходимые поля
+    const completePanel: Partial<Panel> = {
+      ...panelData,
+      // Добавим datasource, если он отсутствует
+      datasource: panelData.datasource || {
+        type: "prometheus",
+        uid: "prometheus",
+      },
+    }
+
+    const response = await dashboardApi.updatePanel(uid, panelId, completePanel)
     if (response.status === "success") {
       await loadDashboard() // Перезагружаем дашборд
       return response.data

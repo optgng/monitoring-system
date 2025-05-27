@@ -13,12 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { 
-  Save, 
-  ArrowLeft, 
-  Plus, 
-  Settings, 
-  Eye, 
+import {
+  Save,
+  ArrowLeft,
+  Plus,
+  Settings,
+  Eye,
   RefreshCw,
   Download,
   Upload,
@@ -63,8 +63,7 @@ export function EnhancedDashboardEditor({ uid, isCreating = false }: EnhancedDas
     timeFrom: "now-1h",
     timeTo: "now",
     editable: true,
-    hideControls: false,
-    fiscalYearStartMonth: 1
+    graphTooltip: 0 // Добавляем graphTooltip в исходном состоянии
   })
   const [tagInput, setTagInput] = useState("")
 
@@ -77,6 +76,7 @@ export function EnhancedDashboardEditor({ uid, isCreating = false }: EnhancedDas
     }
   }, [uid, isCreating])
 
+  // Обновим функцию loadDashboard для обработки данных дашборда
   const loadDashboard = async () => {
     if (!uid) return
 
@@ -95,8 +95,8 @@ export function EnhancedDashboardEditor({ uid, isCreating = false }: EnhancedDas
           timeFrom: dashboardData.time?.from || "now-1h",
           timeTo: dashboardData.time?.to || "now",
           editable: dashboardData.editable !== false,
-          hideControls: dashboardData.hideControls || false,
-          fiscalYearStartMonth: dashboardData.fiscalYearStartMonth || 1
+          // Убедимся, что graphTooltip корректно инициализирован
+          graphTooltip: dashboardData.graphTooltip || 0
         })
       } else {
         toast.error(response.message || 'Не удалось загрузить дашборд')
@@ -133,6 +133,14 @@ export function EnhancedDashboardEditor({ uid, isCreating = false }: EnhancedDas
     }
   }
 
+  // Добавим функцию handleEditPanel, которая отсутствует
+  const handleEditPanel = (panel: Panel) => {
+    setEditingPanel(panel)
+    setPanelEditorMode('edit')
+    setIsPanelEditorOpen(true)
+  }
+
+  // Исправим функцию handleSave для корректной работы с API
   const handleSave = async () => {
     if (!formData.title.trim()) {
       toast.error('Название дашборда обязательно')
@@ -141,21 +149,35 @@ export function EnhancedDashboardEditor({ uid, isCreating = false }: EnhancedDas
 
     setSaving(true)
     try {
+      // Создаем структуру данных дашборда в соответствии с ожидаемым типом
       const dashboardData: Partial<Dashboard> = {
         title: formData.title,
-        description: formData.description,
-        tags: formData.tags,
-        timezone: formData.timezone,
-        refresh: formData.refresh,
+        description: formData.description || "",
+        tags: formData.tags || [],
+        style: "dark", // Добавляем обязательные поля
+        timezone: formData.timezone || "browser",
+        editable: formData.editable !== false,
+        hideControls: false,
+        graphTooltip: formData.graphTooltip || 0,
         time: {
-          from: formData.timeFrom,
-          to: formData.timeTo
+          from: formData.timeFrom || "now-6h",
+          to: formData.timeTo || "now"
         },
-        editable: formData.editable,
-        hideControls: formData.hideControls,
-        fiscalYearStartMonth: formData.fiscalYearStartMonth,
-        panels: dashboard?.panels || []
-      }
+        timepicker: {
+          refresh_intervals: ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"],
+          time_options: ["5m", "15m", "1h", "6h", "12h", "24h", "2d", "7d", "30d"]
+        },
+        templating: { list: [] },
+        annotations: { list: [] },
+        refresh: formData.refresh || "30s",
+        schemaVersion: 36,
+        version: dashboard?.version || 0,
+        panels: dashboard?.panels || [],
+        links: [],
+        fiscalYearStartMonth: 0,
+        liveNow: false,
+        weekStart: ""
+      };
 
       if (isCreating) {
         const response = await dashboardApi.createDashboard(dashboardData)
@@ -182,26 +204,51 @@ export function EnhancedDashboardEditor({ uid, isCreating = false }: EnhancedDas
     }
   }
 
+  // Исправим функцию handleCreatePanel, чтобы она работала и для нового дашборда
   const handleCreatePanel = () => {
+    // Для нового дашборда просто открываем модальное окно
+    if (isCreating) {
+      if (!formData.title.trim()) {
+        toast.warning('Пожалуйста, укажите название дашборда перед добавлением панелей')
+        return
+      }
+
+      // Открываем модальное окно для создания панели
+      setEditingPanel(undefined)
+      setPanelEditorMode('create')
+      setIsPanelEditorOpen(true)
+      return
+    }
+
+    // Для существующего дашборда
     setEditingPanel(undefined)
     setPanelEditorMode('create')
     setIsPanelEditorOpen(true)
   }
 
-  const handleEditPanel = (panel: Panel) => {
-    setEditingPanel(panel)
-    setPanelEditorMode('edit')
-    setIsPanelEditorOpen(true)
-  }
-
+  // Обновим функцию handlePanelSave, чтобы она обрабатывала случай нового дашборда
   const handlePanelSave = (panel: Panel) => {
-    if (dashboard) {
-      const updatedPanels = panelEditorMode === 'create' 
-        ? [...(dashboard.panels || []), panel]
-        : (dashboard.panels || []).map(p => p.id === panel.id ? panel : p)
-      
-      setDashboard(prev => prev ? { ...prev, panels: updatedPanels } : null)
-      toast.success(`Панель ${panelEditorMode === 'create' ? 'создана' : 'обновлена'}`)
+    if (isCreating) {
+      // Для нового дашборда сохраняем панель в локальном состоянии
+      const newDashboard: Dashboard = dashboard || {
+        title: formData.title,
+        panels: [],
+        uid: 'temp'
+      }
+
+      const updatedPanels = [...(newDashboard.panels || []), panel]
+      setDashboard({ ...newDashboard, panels: updatedPanels })
+      toast.success(`Панель добавлена. Не забудьте сохранить дашборд.`)
+    } else {
+      // Для существующего дашборда
+      if (dashboard) {
+        const updatedPanels = panelEditorMode === 'create'
+          ? [...(dashboard.panels || []), panel]
+          : (dashboard.panels || []).map(p => p.id === panel.id ? panel : p)
+
+        setDashboard(prev => prev ? { ...prev, panels: updatedPanels } : null)
+        toast.success(`Панель ${panelEditorMode === 'create' ? 'создана' : 'обновлена'}`)
+      }
     }
   }
 
@@ -235,10 +282,9 @@ export function EnhancedDashboardEditor({ uid, isCreating = false }: EnhancedDas
       timeFrom: importedDashboard.time?.from || "now-1h",
       timeTo: importedDashboard.time?.to || "now",
       editable: importedDashboard.editable !== false,
-      hideControls: importedDashboard.hideControls || false,
-      fiscalYearStartMonth: importedDashboard.fiscalYearStartMonth || 1
+      graphTooltip: importedDashboard.graphTooltip ?? 0
     })
-    
+
     setDashboard(importedDashboard)
     toast.success('Дашборд импортирован')
   }
@@ -270,14 +316,14 @@ export function EnhancedDashboardEditor({ uid, isCreating = false }: EnhancedDas
               {isCreating ? 'Создание дашборда' : 'Редактирование дашборда'}
             </h1>
             <p className="text-muted-foreground">
-              {isCreating 
-                ? 'Создайте новый дашборд для мониторинга' 
+              {isCreating
+                ? 'Создайте новый дашборд для мониторинга'
                 : `Редактирование: ${formData.title || 'Без названия'}`
               }
             </p>
           </div>
         </div>
-        
+
         <div className="flex gap-2">
           {!isCreating && uid && (
             <>
@@ -484,6 +530,18 @@ export function EnhancedDashboardEditor({ uid, isCreating = false }: EnhancedDas
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="now">Сейчас</SelectItem>
+                      {/* Заменяем пустое значение на конкретное значение */}
+                      <SelectItem value="now-1m">1 минуту назад</SelectItem>
+                      <SelectItem value="now-5m">5 минут назад</SelectItem>
+                      <SelectItem value="now-15m">15 минут назад</SelectItem>
+                      <SelectItem value="now-30m">30 минут назад</SelectItem>
+                      <SelectItem value="now-1h">1 час назад</SelectItem>
+                      <SelectItem value="now-3h">3 часа назад</SelectItem>
+                      <SelectItem value="now-6h">6 часов назад</SelectItem>
+                      <SelectItem value="now-12h">12 часов назад</SelectItem>
+                      <SelectItem value="now-24h">24 часа назад</SelectItem>
+                      <SelectItem value="now-2d">2 дня назад</SelectItem>
+                      <SelectItem value="now-7d">7 дней назад</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -583,65 +641,43 @@ export function EnhancedDashboardEditor({ uid, isCreating = false }: EnhancedDas
                   onCheckedChange={(checked) => updateFormData({ editable: checked })}
                 />
               </div>
-              
+
               <Separator />
-              
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Скрыть элементы управления</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Скрыть элементы управления времени и обновления
-                  </p>
-                </div>
-                <Switch
-                  checked={formData.hideControls}
-                  onCheckedChange={(checked) => updateFormData({ hideControls: checked })}
-                />
-              </div>
-              
-              <Separator />
-              
+
               <div className="space-y-2">
-                <Label>Начало финансового года</Label>
-                <Select 
-                  value={formData.fiscalYearStartMonth.toString()} 
-                  onValueChange={(value) => updateFormData({ fiscalYearStartMonth: parseInt(value) })}
+                <Label>Подсказки графиков</Label>
+                {/* Исправляем проблему с выбором значения */}
+                <Select
+                  value={formData.graphTooltip.toString()} // Приводим к строке
+                  onValueChange={(value) => updateFormData({ graphTooltip: parseInt(value, 10) })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="graphTooltip">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1">Январь</SelectItem>
-                    <SelectItem value="2">Февраль</SelectItem>
-                    <SelectItem value="3">Март</SelectItem>
-                    <SelectItem value="4">Апрель</SelectItem>
-                    <SelectItem value="5">Май</SelectItem>
-                    <SelectItem value="6">Июнь</SelectItem>
-                    <SelectItem value="7">Июль</SelectItem>
-                    <SelectItem value="8">Август</SelectItem>
-                    <SelectItem value="9">Сентябрь</SelectItem>
-                    <SelectItem value="10">Октябрь</SelectItem>
-                    <SelectItem value="11">Ноябрь</SelectItem>
-                    <SelectItem value="12">Декабрь</SelectItem>
+                    <SelectItem value="0">По умолчанию</SelectItem>
+                    <SelectItem value="1">Общие</SelectItem>
+                    <SelectItem value="2">Раздельные</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-sm text-muted-foreground">
+                  Настройка поведения подсказок на графиках
+                </p>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
 
-      {/* Panel Editor Modal */}
-      {uid && (
-        <EnhancedPanelEditor
-          dashboardUid={uid}
-          panel={editingPanel}
-          isOpen={isPanelEditorOpen}
-          onClose={() => setIsPanelEditorOpen(false)}
-          onSave={handlePanelSave}
-          mode={panelEditorMode}
-        />
-      )}
+      {/* Panel Editor Modal - должен всегда рендериться */}
+      <EnhancedPanelEditor
+        dashboardUid={uid || 'new'} // Используем 'new' для нового дашборда
+        panel={editingPanel}
+        isOpen={isPanelEditorOpen}
+        onClose={() => setIsPanelEditorOpen(false)}
+        onSave={handlePanelSave}
+        mode={panelEditorMode}
+      />
     </div>
   )
 }

@@ -1,544 +1,565 @@
 // Типы для API дашбордов
 export interface Dashboard {
-  uid: string
   id?: number
+  uid?: string
   title: string
   description?: string
   tags?: string[]
   timezone?: string
-  refresh?: string
+  panels?: Panel[]
+  editable?: boolean
+  graphTooltip?: number
   time?: {
-    from: string
-    to: string
+    from?: string
+    to?: string
   }
+  refresh?: string
   templating?: {
-    list: Variable[]
+    list: any[]
   }
   annotations?: {
-    list: Annotation[]
+    list: any[]
   }
-  panels: Panel[]
+  timepicker?: {
+    refresh_intervals?: string[]
+    time_options?: string[]
+  }
+  schemaVersion?: number
   version?: number
+  style?: string
+  links?: any[]
+  hideControls?: boolean
+  fiscalYearStartMonth?: number
+  liveNow?: boolean
+  weekStart?: string
   created?: string
   updated?: string
-  createdBy?: string
-  updatedBy?: string
-  editable?: boolean
-  gnetId?: number
-  graphTooltip?: number
-  hideControls?: boolean
-  links?: any[]
-  schemaVersion?: number
-  style?: string
-  fiscalYearStartMonth?: number
+  metadata?: any
+  panelCount?: number
+}
+
+export interface Target {
+  refId: string
+  expr: string
+  interval?: string
+  legendFormat?: string
+  datasource: {
+    type: string
+    uid: string
+  }
 }
 
 export interface Panel {
   id: number
   title: string
-  type: string
   description?: string
-  transparent?: boolean
+  type: string // Используем современные типы: "timeseries", "stat", "gauge", "table" и т.д.
+  datasource: {
+    type: string
+    uid: string
+  }
+  targets?: Target[]
   gridPos: {
     h: number
     w: number
     x: number
     y: number
   }
-  targets: Target[]
-  fieldConfig: {
-    defaults: any
-    overrides: any[]
-  }
-  options: any
-  pluginVersion?: string
-  datasource?: any
-}
-
-export interface Target {
-  expr: string
-  refId: string
-  legendFormat?: string
-  interval?: string
-  format?: string
-  instant?: boolean
-}
-
-export interface Variable {
-  name: string
-  type: string
-  label?: string
-  description?: string
-  query?: string
-  datasource?: string
-  refresh?: number
-  sort?: number
-  multi?: boolean
-  includeAll?: boolean
-  allValue?: string
-  options?: any[]
-  current?: any
-  hide?: number
-}
-
-export interface Annotation {
-  name: string
-  datasource: string
-  enable: boolean
-  expr?: string
-  titleFormat?: string
-  textFormat?: string
-  tagsField?: string
-  timeField?: string
-  iconColor?: string
-  type?: string
+  options?: any
+  fieldConfig?: any
+  transparent?: boolean
 }
 
 export interface DashboardListItem {
   uid: string
-  id: number
   title: string
   description?: string
   tags: string[]
-  isStarred: boolean
-  url: string
+  isStarred?: boolean
+  uri?: string
+  url?: string
   folderId?: number
   folderTitle?: string
-  folderUrl?: string
-  type: string
-  created: string
-  updated: string
-  panels?: Panel[] // Добавляем панели для корректного подсчета
-  panelCount?: number // Альтернативное поле для подсчета панелей
+  created?: string
+  updated?: string
+  panelCount?: number
+  dashboard?: Dashboard // Добавлено для поддержки вложенного dashboard
 }
 
+// Типы для ответов API
 export interface ApiResponse<T> {
   data: T
   message?: string
   status: "success" | "error"
 }
 
+// Определяем тип RequestOptions для использования в fetch-запросах
+export interface RequestOptions extends RequestInit {
+  retry?: number
+  headers?: HeadersInit
+}
+
+// Обновление класса DashboardApiService для корректной работы с FastAPI Dashboards Service
 class DashboardApiService {
-  private baseUrl: string
+  private apiUrl: string
+  private defaultRetry: number
 
-  constructor() {
-    // Используем переменную окружения для API дашбордов и добавляем проверку URL
-    const configuredUrl = process.env.NEXT_PUBLIC_DASHBOARD_API_URL || "http://localhost:8050";
-
-    // Убираем trailing slash если он есть
-    this.baseUrl = configuredUrl.endsWith("/")
-      ? configuredUrl.slice(0, -1)
-      : configuredUrl;
-
-    console.log(`Dashboard API URL: ${this.baseUrl}`);
+  constructor(
+    apiUrl: string = process.env.NEXT_PUBLIC_DASHBOARD_API_URL || 'http://localhost:8050/api',
+    defaultRetry: number = 3
+  ) {
+    this.apiUrl = apiUrl
+    this.defaultRetry = defaultRetry
   }
 
-  // Проверка работоспособности API - используем тот же эндпоинт что и в ApiMetrics
-  async checkHealth(): Promise<boolean> {
+  async request<T = any>(endpoint: string, options: RequestOptions = {}) {
+    const url = this.apiUrl + endpoint;
+
+    // Создаем новый объект headers для избежания проблем с типизацией
+    const headersObj: Record<string, string> = { 'Content-Type': 'application/json' };
+
+    // Правильно копируем заголовки из options.headers, если они существуют
+    if (options.headers) {
+      // Если headers - это экземпляр Headers
+      if (options.headers instanceof Headers) {
+        options.headers.forEach((value, key) => {
+          headersObj[key] = value;
+        });
+      }
+      // Если headers - это простой объект
+      else if (typeof options.headers === 'object') {
+        Object.entries(options.headers).forEach(([key, value]) => {
+          if (typeof value === 'string') {
+            headersObj[key] = value;
+          }
+        });
+      }
+    }
+
     try {
-      const response = await fetch(`${this.baseUrl}/api/metrics/json`, {
-        signal: AbortSignal.timeout(5000)
+      const retryCount = options.retry ?? this.defaultRetry;
+
+      for (let attempt = 0; attempt <= retryCount; attempt++) {
+        try {
+          let response = await fetch(url, {
+            ...options,
+            headers: headersObj
+          });
+
+          if (!response.ok) {
+            const contentType = response.headers.get('content-type');
+            let errorText = response.statusText;
+
+            try {
+              // Попытка распарсить JSON в ошибке
+              if (contentType?.includes('application/json')) {
+                const errorData = await response.json();
+                errorText = JSON.stringify(errorData);
+
+                // Если это ошибка валидации, сделаем ее более понятной
+                if (response.status === 422 && errorData.detail) {
+                  const fieldErrors = errorData.detail.map((err: any) => {
+                    return `Поле ${err.loc.join('.')} ${err.msg}`;
+                  }).join('; ');
+
+                  throw new Error(`Ошибка валидации: ${fieldErrors}`);
+                }
+              } else {
+                errorText = await response.text();
+              }
+            } catch (parseError) {
+              console.error('Ошибка при парсинге ответа:', parseError);
+            }
+
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+          }
+
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const data = await response.json();
+            return data as T;
+          } else {
+            return await response.text() as unknown as T;
+          }
+        } catch (error) {
+          if (attempt === retryCount) {
+            throw error;
+          }
+          console.warn(`Retry ${attempt + 1}/${retryCount + 1} after error:`, error);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+        }
+      }
+
+      throw new Error(`Request failed after ${retryCount + 1} attempts`);
+    } catch (error) {
+      console.error(`API Request Error [${endpoint}]:`, error);
+      throw error;
+    }
+  }
+
+  // Методы для работы с дашбордами
+
+  // Обновляем метод для получения списка дашбордов с получением статистики для каждого дашборда
+  async listDashboards(filters: Record<string, any> = {}): Promise<ApiResponse<DashboardListItem[]>> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== null && value !== undefined) {
+        params.append(key, String(value));
+      }
+    });
+
+    const query = params.toString() ? `?${params.toString()}` : '';
+
+    try {
+      // Добавляем логирование для отладки
+      console.log(`Запрос к API: ${this.apiUrl}/api/${query}`);
+
+      const response = await this.request<any>(`/api/${query}`);
+      console.log("Исходный ответ API:", response);
+
+      // Проверяем формат ответа и приводим его к нужному формату
+      let dashboards: DashboardListItem[] = [];
+
+      if (response.status === "success") {
+        // Если ответ содержит вложенное поле data, которое является массивом
+        if (Array.isArray(response.data)) {
+          dashboards = response.data;
+        }
+        // Если ответ содержит объект с полем dashboards, которое является массивом
+        else if (response.data && Array.isArray(response.data.dashboards)) {
+          dashboards = response.data.dashboards;
+        }
+        // Если ответ содержит объект с полем result, которое является массивом
+        else if (response.data && Array.isArray(response.data.result)) {
+          dashboards = response.data.result;
+        }
+        // Если ответ содержит один дашборд как объект
+        else if (response.data && typeof response.data === 'object' && response.data.uid) {
+          dashboards = [response.data];
+        }
+        // Если data вообще не существует, но сам response является массивом
+        else if (Array.isArray(response)) {
+          dashboards = response;
+        }
+        // Если сам response является объектом и содержит uid
+        else if (typeof response === 'object' && response.uid) {
+          dashboards = [response];
+        }
+      } else {
+        // В случае если ответ напрямую представляет собой массив (без обертки status/data)
+        if (Array.isArray(response)) {
+          dashboards = response;
+        }
+      }
+
+      console.log("Обработанные дашборды:", dashboards);
+
+      // Убедимся, что все дашборды имеют необходимые поля
+      dashboards = dashboards.map(dashboard => {
+        // Определим количество панелей - проверим все возможные источники этого значения
+        let panelCount = 0;
+        if (typeof dashboard.panelCount === 'number') {
+          panelCount = dashboard.panelCount;
+        } else if (dashboard.dashboard && Array.isArray(dashboard.dashboard.panels)) {
+          // Иногда панели могут быть вложены в поле dashboard
+          panelCount = dashboard.dashboard.panels.length;
+        }
+
+        return {
+          uid: dashboard.uid || '',
+          title: dashboard.title || 'Без названия',
+          description: dashboard.description || '',
+          tags: dashboard.tags || [],
+          url: dashboard.url || '',
+          isStarred: dashboard.isStarred || false,
+          created: dashboard.created || '',
+          updated: dashboard.updated || '',
+          panelCount: panelCount // Используем вычисленное значение
+        };
       });
 
-      return response.ok;
-    } catch (error) {
-      console.error("Health check failed:", error);
-      return false;
-    }
-  }
-
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
-    const url = `${this.baseUrl}${endpoint}`
-
-    // Убираем принудительную проверку health check в начале каждого запроса
-    // Вместо этого полагаемся на retry механизм
-
-    // Получаем токен из сессии (если используется NextAuth)
-    const session = typeof window !== "undefined" ? await import("next-auth/react").then((m) => m.getSession()) : null
-
-    const defaultHeaders = {
-      "Content-Type": "application/json",
-      // Добавляем авторизацию если есть токен
-      ...(session?.accessToken && { Authorization: `Bearer ${session.accessToken}` }),
-    }
-
-    // Настройки для повторных попыток
-    const maxRetries = 2;
-    let retries = 0;
-    let lastError: Error | null = null;
-
-    while (retries <= maxRetries) {
+      // После получения списка дашбордов, загрузим статистику для каждого
       try {
-        // Создаем timeout с AbortController
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // Уменьшаем таймаут до 10 секунд
+        const enrichedDashboards = [];
 
-        const response = await fetch(url, {
-          ...options,
-          headers: {
-            ...defaultHeaders,
-            ...(options.headers || {})
-          },
-          signal: controller.signal
-        });
-
-        // Очищаем таймаут после завершения запроса
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
-        }
-
-        const contentType = response.headers.get("content-type");
-        let data;
-
-        if (contentType && contentType.includes("application/json")) {
-          data = await response.json();
-        } else {
-          data = await response.text();
-        }
-
-        return {
-          data,
-          status: "success",
-        };
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-
-        // Если это не таймаут или уже исчерпали все попытки, выходим из цикла
-        if (!(error instanceof Error && error.name === "AbortError") || retries >= maxRetries) {
-          break;
-        }
-
-        // Увеличиваем счетчик попыток и делаем паузу перед следующей попыткой
-        retries++;
-        await new Promise(resolve => setTimeout(resolve, 1000 * retries)); // Уменьшаем задержку
-        console.log(`Retry ${retries}/${maxRetries} for ${endpoint}...`);
-      }
-    }
-
-    console.error(`API request failed for ${endpoint} after ${retries} retries:`, lastError);
-
-    // Определяем более понятное сообщение об ошибке для пользователя
-    let errorMessage = "Неизвестная ошибка";
-    if (lastError) {
-      if (lastError.name === "AbortError" || lastError.message.includes("timeout")) {
-        errorMessage = "Превышено время ожидания ответа от сервера. Проверьте доступность сервиса дашбордов.";
-      } else if (lastError.message.includes("fetch failed") || lastError.message.includes("Failed to fetch")) {
-        errorMessage = "Не удалось подключиться к сервису дашбордов. Проверьте, запущен ли сервис.";
-      } else {
-        errorMessage = lastError.message;
-      }
-    }
-
-    return {
-      data: null as T,
-      status: "error",
-      message: errorMessage,
-    };
-  }
-
-  // Dashboard methods
-  async listDashboards(): Promise<ApiResponse<DashboardListItem[]>> {
-    const response = await this.request<DashboardListItem[]>("/api/")
-
-    // Если получили успешный ответ, обогащаем данные панелями
-    if (response.status === "success" && Array.isArray(response.data)) {
-      const enrichedDashboards = await Promise.all(
-        response.data.map(async (dashboard) => {
+        for (const dashboard of dashboards) {
           try {
-            // Получаем полные данные дашборда для подсчета панелей
-            const fullDashboardResponse = await this.getDashboard(dashboard.uid)
-            if (fullDashboardResponse.status === "success" && fullDashboardResponse.data) {
-              const fullDashboard = fullDashboardResponse.data as Dashboard
-              return {
+            // Получаем статистику дашборда
+            const stats = await this.getDashboardStats(dashboard.uid);
+
+            // Если статистика получена успешно, берем количество панелей из неё
+            if (stats.status === "success" && stats.data.total_panels !== undefined) {
+              enrichedDashboards.push({
                 ...dashboard,
-                panels: fullDashboard.panels || [],
-                panelCount: (fullDashboard.panels || []).length
-              }
+                panelCount: stats.data.total_panels
+              });
+            } else {
+              // Иначе используем существующее значение или количество панелей из свойства panels
+              enrichedDashboards.push({
+                ...dashboard,
+                panelCount: dashboard.panelCount || 0
+              });
             }
           } catch (error) {
-            console.warn(`Failed to get panels for dashboard ${dashboard.uid}:`, error)
+            console.warn(`Не удалось получить статистику для дашборда ${dashboard.uid}:`, error);
+            enrichedDashboards.push(dashboard);
           }
-
-          // Возвращаем исходный дашборд если не удалось получить панели
-          return {
-            ...dashboard,
-            panels: [],
-            panelCount: 0
-          }
-        })
-      )
-
-      return {
-        ...response,
-        data: enrichedDashboards
-      }
-    }
-
-    return response
-  }
-
-  async getDashboard(uid?: string): Promise<ApiResponse<Dashboard | DashboardListItem[]>> {
-    if (uid) {
-      const response = await this.request<any>(`/api/${uid}`)
-      if (response.status === "success") {
-        // Извлекаем dashboard из response (API возвращает объект с meta и dashboard)
-        const dashboardData = response.data.dashboard || response.data
-        return {
-          ...response,
-          data: dashboardData
         }
+
+        return {
+          status: "success",
+          data: enrichedDashboards,
+          message: ""
+        };
+      } catch (error) {
+        console.error("Ошибка при обогащении данных дашбордов:", error);
+        return {
+          status: "success",
+          data: dashboards.map(dashboard => ({
+            ...dashboard,
+            panelCount: dashboard.panelCount || 0
+          })),
+          message: ""
+        };
       }
-      return response
-    } else {
-      return this.request<DashboardListItem[]>("/api/")
+    } catch (error) {
+      console.error("Ошибка при получении списка дашбордов:", error);
+      return {
+        status: "error",
+        data: [],
+        message: error instanceof Error ? error.message : "Неизвестная ошибка"
+      };
     }
   }
 
-  async createDashboard(dashboard: Partial<Dashboard>): Promise<ApiResponse<Dashboard>> {
-    // Обертываем данные согласно API схеме
-    const payload = {
+  async listDashboardsWithFilters(filters: Record<string, any> = {}): Promise<ApiResponse<DashboardListItem[]>> {
+    return this.listDashboards(filters);
+  }
+
+  async createDashboard(dashboardData: Partial<Dashboard>): Promise<ApiResponse<Dashboard>> {
+    // Формируем правильную структуру запроса согласно API
+    const requestData = {
       dashboard: {
-        title: dashboard.title,
-        description: dashboard.description,
-        tags: dashboard.tags || [],
-        timezone: dashboard.timezone || "browser",
-        schemaVersion: dashboard.schemaVersion || 16,
-        refresh: dashboard.refresh,
-        time: dashboard.time,
-        panels: dashboard.panels || []
+        title: dashboardData.title,
+        description: dashboardData.description || "",
+        tags: dashboardData.tags || [],
+        style: dashboardData.style || "dark",
+        timezone: dashboardData.timezone || "browser",
+        editable: dashboardData.editable !== false,
+        hideControls: dashboardData.hideControls || false,
+        graphTooltip: dashboardData.graphTooltip || 0,
+        time: dashboardData.time || {
+          from: "now-6h",
+          to: "now"
+        },
+        timepicker: dashboardData.timepicker || {
+          refresh_intervals: ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"],
+          time_options: ["5m", "15m", "1h", "6h", "12h", "24h", "2d", "7d", "30d"]
+        },
+        templating: dashboardData.templating || { list: [] },
+        annotations: dashboardData.annotations || { list: [] },
+        refresh: dashboardData.refresh || "30s",
+        schemaVersion: dashboardData.schemaVersion || 36,
+        version: dashboardData.version || 0,
+        panels: dashboardData.panels || [],
+        links: dashboardData.links || [],
+        fiscalYearStartMonth: dashboardData.fiscalYearStartMonth || 0,
+        liveNow: dashboardData.liveNow || false,
+        weekStart: dashboardData.weekStart || ""
       },
       folderId: 0,
-      overwrite: true,
-      message: "Created via WebUI"
-    }
+      overwrite: false
+    };
 
-    const response = await this.request<any>("/api/", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    })
-
-    if (response.status === "success") {
-      // Извлекаем dashboard из response
-      const dashboardData = response.data.dashboard || response.data
-      return {
-        ...response,
-        data: dashboardData
-      }
-    }
-    return response
+    return this.request<ApiResponse<Dashboard>>('/api/', {
+      method: 'POST',
+      body: JSON.stringify(requestData)
+    });
   }
 
-  async updateDashboard(uid: string, dashboard: Partial<Dashboard>): Promise<ApiResponse<Dashboard>> {
-    // Обертываем данные согласно API схеме
-    const payload = {
+  async getDashboard(uid: string): Promise<ApiResponse<Dashboard>> {
+    try {
+      const response = await this.request<any>(`/api/${uid}`);
+      console.log('Исходный ответ API getDashboard:', response);
+
+      // Проверим разные форматы ответа и правильно их обработаем
+      let dashboardData: Dashboard;
+
+      if (response.dashboard) {
+        // Случай когда дашборд вложен в поле dashboard
+        dashboardData = response.dashboard;
+      } else if (response.data && response.data.dashboard) {
+        // Случай когда дашборд вложен в data.dashboard
+        dashboardData = response.data.dashboard;
+      } else if (response.data) {
+        // Случай когда дашборд находится в data
+        dashboardData = response.data;
+      } else {
+        // Прямой ответ от API
+        dashboardData = response;
+      }
+
+      // Убедимся, что дашборд имеет необходимые поля
+      dashboardData.panels = dashboardData.panels || [];
+      dashboardData.tags = dashboardData.tags || [];
+      dashboardData.templating = dashboardData.templating || { list: [] };
+
+      return {
+        status: "success",
+        data: dashboardData,
+        message: response.message || ""
+      };
+    } catch (error) {
+      console.error("Ошибка при получении дашборда:", error);
+      return {
+        status: "error",
+        data: {} as Dashboard,
+        message: error instanceof Error ? error.message : "Неизвестная ошибка"
+      };
+    }
+  }
+
+  async updateDashboard(uid: string, dashboardData: Partial<Dashboard>): Promise<ApiResponse<Dashboard>> {
+    // Получаем текущие данные дашборда
+    const currentDashboard = await this.getDashboard(uid);
+
+    // Формируем обновленный дашборд с сохранением текущих данных
+    const updatedDashboard = {
       dashboard: {
-        title: dashboard.title,
-        description: dashboard.description,
-        tags: dashboard.tags || [],
-        timezone: dashboard.timezone || "browser",
-        schemaVersion: dashboard.schemaVersion || 16,
-        refresh: dashboard.refresh,
-        time: dashboard.time,
-        panels: dashboard.panels || []
+        ...currentDashboard.data,
+        ...dashboardData,
+        title: dashboardData.title || currentDashboard.data.title,
+        uid: uid,
+        version: (currentDashboard.data.version || 0) + 1
       },
       folderId: 0,
-      overwrite: true,
-      message: "Updated via WebUI"
-    }
+      overwrite: true
+    };
 
-    const response = await this.request<any>(`/api/${uid}`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    })
-
-    if (response.status === "success") {
-      // Извлекаем dashboard из response
-      const dashboardData = response.data.dashboard || response.data
-      return {
-        ...response,
-        data: dashboardData
-      }
-    }
-    return response
+    return this.request<ApiResponse<Dashboard>>(`/api/${uid}`, {
+      method: 'PUT',
+      body: JSON.stringify(updatedDashboard)
+    });
   }
 
-  async deleteDashboard(uid: string): Promise<ApiResponse<void>> {
-    return this.request<void>(`/api/${uid}`, {
-      method: "DELETE",
-    })
+  async deleteDashboard(uid: string): Promise<ApiResponse<{}>> {
+    return this.request<ApiResponse<{}>>(`/api/${uid}`, {
+      method: 'DELETE'
+    });
   }
 
   async duplicateDashboard(uid: string, newTitle?: string): Promise<ApiResponse<Dashboard>> {
-    return this.request<Dashboard>(`/api/${uid}/duplicate`, {
-      method: "POST",
-      body: newTitle ? JSON.stringify({ title: newTitle }) : undefined,
-    })
+    const data = newTitle ? { title: newTitle } : undefined;
+    return this.request<ApiResponse<Dashboard>>(`/api/${uid}/duplicate`, {
+      method: 'POST',
+      ...(data && { body: JSON.stringify(data) })
+    });
   }
 
-  async importDashboard(dashboardJson: string): Promise<ApiResponse<Dashboard>> {
-    return this.request<Dashboard>("/api/import", {
-      method: "POST",
-      body: JSON.stringify({ dashboard: dashboardJson }),
-    })
-  }
+  // Методы для работы с панелями
 
-  async exportDashboard(uid: string): Promise<ApiResponse<any>> {
-    try {
-      // Сначала пытаемся использовать встроенный экспорт API
-      const exportResponse = await this.request<any>(`/api/${uid}/export`)
-      if (exportResponse.status === "success") {
-        return exportResponse
-      }
-
-      // Если экспорт через API не работает, получаем данные дашборда напрямую
-      console.warn("API export failed, using direct dashboard fetch")
-      const dashboardResponse = await this.getDashboard(uid)
-      if (dashboardResponse.status === "success") {
-        return {
-          status: "success",
-          data: dashboardResponse.data,
-          message: "Dashboard exported successfully (direct method)"
-        }
-      }
-
-      return dashboardResponse
-    } catch (error) {
-      console.error("Export failed:", error)
-      // Fallback - пытаемся получить дашборд напрямую
-      const dashboardResponse = await this.getDashboard(uid)
-      if (dashboardResponse.status === "success") {
-        return {
-          status: "success",
-          data: dashboardResponse.data,
-          message: "Dashboard exported successfully (fallback method)"
-        }
-      }
-
-      return {
-        data: null as any,
-        status: "error",
-        message: error instanceof Error ? error.message : "Export failed"
-      }
-    }
-  }
-
-  async compareDashboardVersions(uid: string, version1: number, version2: number): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/${uid}/compare?version1=${version1}&version2=${version2}`)
-  }
-
-  async visualizeDashboardStructure(uid: string): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/${uid}/visualize`)
-  }
-
-  // Panel methods
-  async createPanel(dashboardUid: string, panel: Partial<Panel>): Promise<ApiResponse<Panel>> {
-    // Подготавливаем данные панели согласно API
-    const panelData = {
-      title: panel.title,
-      type: panel.type,
-      datasource: panel.datasource || {
+  async createPanel(dashboardUid: string, panelData: Partial<Panel>): Promise<ApiResponse<Panel>> {
+    // Убедимся, что у панели есть datasource
+    const panel = {
+      ...panelData,
+      datasource: panelData.datasource || {
         type: "prometheus",
         uid: "prometheus"
       },
-      targets: panel.targets || [],
-      gridPos: panel.gridPos || { h: 8, w: 12, x: 0, y: 0 },
-      options: panel.options || {}
-    }
+      // Убедимся, что у каждого target есть datasource
+      targets: panelData.targets?.map(target => ({
+        ...target,
+        datasource: target.datasource || {
+          type: "prometheus",
+          uid: "prometheus"
+        }
+      })) || []
+    };
 
-    return this.request<Panel>(`/api/${dashboardUid}/panels`, {
-      method: "POST",
-      body: JSON.stringify(panelData),
-    })
+    return this.request<ApiResponse<Panel>>(`/api/${dashboardUid}/panels`, {
+      method: 'POST',
+      body: JSON.stringify(panel)
+    });
   }
 
   async getPanel(dashboardUid: string, panelId: number): Promise<ApiResponse<Panel>> {
-    return this.request<Panel>(`/api/${dashboardUid}/panels/${panelId}`)
+    return this.request<ApiResponse<Panel>>(`/api/${dashboardUid}/panels/${panelId}`);
   }
 
-  async updatePanel(dashboardUid: string, panelId: number, panel: Partial<Panel>): Promise<ApiResponse<Panel>> {
-    // Подготавливаем данные панели согласно API
-    const panelData = {
-      title: panel.title,
-      type: panel.type,
-      datasource: panel.datasource,
-      targets: panel.targets || [],
-      gridPos: panel.gridPos,
-      options: panel.options || {}
+  async updatePanel(dashboardUid: string, panelId: number, panelData: Partial<Panel>): Promise<ApiResponse<Panel>> {
+    // Убедимся, что у панели есть datasource
+    const panel = {
+      ...panelData,
+      id: panelId,
+      datasource: panelData.datasource || {
+        type: "prometheus",
+        uid: "prometheus"
+      },
+      // Убедимся, что у каждого target есть datasource
+      targets: panelData.targets?.map(target => ({
+        ...target,
+        datasource: target.datasource || {
+          type: "prometheus",
+          uid: "prometheus"
+        }
+      })) || []
+    };
+
+    return this.request<ApiResponse<Panel>>(`/api/${dashboardUid}/panels/${panelId}`, {
+      method: 'PUT',
+      body: JSON.stringify(panel)
+    });
+  }
+
+  async deletePanel(dashboardUid: string, panelId: number): Promise<ApiResponse<{}>> {
+    return this.request<ApiResponse<{}>>(`/api/${dashboardUid}/panels/${panelId}`, {
+      method: 'DELETE'
+    });
+  }
+
+  // Экспорт и импорт дашбордов
+
+  async exportDashboard(uid: string): Promise<ApiResponse<Dashboard>> {
+    return this.request<ApiResponse<Dashboard>>(`/api/${uid}/export`);
+  }
+
+  // PromQL хелперы
+
+  async validatePromQLQuery(query: string): Promise<ApiResponse<{ valid: boolean, warnings: string[] }>> {
+    return this.request<ApiResponse<{ valid: boolean, warnings: string[] }>>('/api/promql/validate', {
+      method: 'POST',
+      body: JSON.stringify({ query })
+    });
+  }
+
+  async getPromQLExamples(): Promise<ApiResponse<any>> {
+    return this.request<ApiResponse<any>>('/api/promql/examples');
+  }
+
+  async getPromQLTemplate(metricType: string): Promise<ApiResponse<any>> {
+    return this.request<ApiResponse<any>>(`/api/promql/templates/${metricType}`);
+  }
+
+  // Добавленный метод для получения статистики дашборда
+  async getDashboardStats(uid: string): Promise<ApiResponse<any>> {
+    try {
+      const response = await this.request<any>(`/api/${uid}/stats`);
+      console.log('Статистика дашборда:', response);
+
+      return {
+        status: "success",
+        data: response,
+        message: ""
+      };
+    } catch (error) {
+      console.error("Ошибка при получении статистики дашборда:", error);
+      return {
+        status: "error",
+        data: {},
+        message: error instanceof Error ? error.message : "Неизвестная ошибка"
+      };
     }
-
-    return this.request<Panel>(`/api/${dashboardUid}/panels/${panelId}`, {
-      method: "PUT",
-      body: JSON.stringify(panelData),
-    })
-  }
-
-  async deletePanel(dashboardUid: string, panelId: number): Promise<ApiResponse<void>> {
-    return this.request<void>(`/api/${dashboardUid}/panels/${panelId}`, {
-      method: "DELETE",
-    })
-  }
-  // Metrics methods
-  async getMetrics(): Promise<ApiResponse<string>> {
-    return this.request<string>("/api/metrics")
-  }
-
-  async getMetricsJson(): Promise<ApiResponse<any>> {
-    return this.request<any>("/api/metrics/json")
-  }
-
-  async getMetricsSummary(): Promise<ApiResponse<any>> {
-    return this.request<any>("/api/metrics/summary")
-  }
-
-  // PromQL Helper methods (новые эндпоинты)
-  async validatePromQL(query: string): Promise<ApiResponse<{ valid: boolean, query: string, warnings: string[] }>> {
-    return this.request<{ valid: boolean, query: string, warnings: string[] }>("/api/promql/validate", {
-      method: "POST",
-      body: JSON.stringify({ query }),
-    })
-  }
-
-
-  async getPromQLExamples(): Promise<ApiResponse<Array<{ category: string, examples: Array<{ title: string, query: string, legend: string, description: string }> }>>> {
-    return this.request<Array<{ category: string, examples: Array<{ title: string, query: string, legend: string, description: string }> }>>("/api/promql/examples")
-  }
-
-  async getPanelTemplate(type: string): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/promql/templates/${type}`)
-  }
-
-  // Расширенные методы для дашбордов с фильтрацией
-  async listDashboardsWithFilters(filters: {
-    tag?: string
-    search?: string
-    starred?: boolean
-    limit?: number
-  } = {}): Promise<ApiResponse<DashboardListItem[]>> {
-    const params = new URLSearchParams()
-
-    if (filters.tag) params.append('tag', filters.tag)
-    if (filters.search) params.append('search', filters.search)
-    if (filters.starred !== undefined) params.append('starred', filters.starred.toString())
-    if (filters.limit) params.append('limit', filters.limit.toString())
-
-    const endpoint = params.toString() ? `/api/?${params.toString()}` : "/api/"
-    return this.request<DashboardListItem[]>(endpoint)
-  }
-
-  // Улучшенный метод импорта дашборда
-  async importDashboardFromFile(file: File): Promise<ApiResponse<Dashboard>> {
-    const formData = new FormData()
-    formData.append('file', file)
-
-    return this.request<Dashboard>("/api/import", {
-      method: "POST",
-      body: formData,
-      headers: {} // Убираем Content-Type для FormData
-    })
   }
 }
 
-export const dashboardApi = new DashboardApiService()
+export const dashboardApi = new DashboardApiService();

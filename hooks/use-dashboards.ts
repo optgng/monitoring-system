@@ -34,7 +34,23 @@ export function useDashboards() {
   const createDashboard = useCallback(
     async (dashboard: Partial<Dashboard>) => {
       try {
-        const response = await dashboardApi.createDashboard(dashboard)
+        // Создаем правильную структуру для запроса создания дашборда
+        const dashboardData = {
+          title: dashboard.title,
+          description: dashboard.description || "",
+          tags: dashboard.tags || [],
+          timezone: dashboard.timezone || "browser",
+          refresh: dashboard.refresh || "30s",
+          time: dashboard.time || {
+            from: "now-6h",
+            to: "now",
+          },
+          panels: dashboard.panels || [],
+          editable: dashboard.editable !== false,
+          graphTooltip: dashboard.graphTooltip || 0,
+        }
+
+        const response = await dashboardApi.createDashboard(dashboardData)
         if (response.status === "success") {
           await loadDashboards() // Перезагружаем список
           return response.data

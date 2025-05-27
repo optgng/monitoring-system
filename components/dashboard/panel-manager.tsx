@@ -768,7 +768,7 @@ export function PanelManager({ dashboardId, initialPanels = [], onPanelsChange, 
                   <Label>Режим</Label>
                   <Select
                     value={editForm.tooltipMode}
-                    onValueChange={(value) => setEditForm({ ...editForm, tooltipMode: value as "single" | "multi" | "none" })} // Исправлено: явное приведение типа
+                    onValueChange={(value) => setEditForm({ ...editForm, tooltipMode: value as "single" | "multi" | "none" })}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -785,7 +785,7 @@ export function PanelManager({ dashboardId, initialPanels = [], onPanelsChange, 
                   <Label>Сортировка</Label>
                   <Select
                     value={editForm.tooltipSort}
-                    onValueChange={(value) => setEditForm({ ...editForm, tooltipSort: value as "none" | "asc" | "desc" })} // Исправлено: явное приведение типа
+                    onValueChange={(value) => setEditForm({ ...editForm, tooltipSort: value as "none" | "asc" | "desc" })}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -819,87 +819,248 @@ export function PanelManager({ dashboardId, initialPanels = [], onPanelsChange, 
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
       >
-        <div className="space-y-4 py-2 pb-4">
-          <div className="space-y-2">
-            <Label htmlFor="edit-title">Название</Label>
-            <Input
-              id="edit-title"
-              value={editForm.title}
-              onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-            />
-          </div>
+        <Tabs defaultValue="general" className="w-full">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="general">Основные</TabsTrigger>
+            <TabsTrigger value="queries">Запросы</TabsTrigger>
+            <TabsTrigger value="visualization">Визуализация</TabsTrigger>
+            <TabsTrigger value="display">Отображение</TabsTrigger>
+          </TabsList>
 
-          <div className="space-y-2">
-            <Label htmlFor="edit-description">Описание</Label>
-            <Textarea
-              id="edit-description"
-              value={editForm.description}
-              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-            />
-          </div>
+          <TabsContent value="general" className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-title">Название</Label>
+              <Input
+                id="edit-title"
+                value={editForm.title}
+                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                placeholder="Введите название панели"
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="edit-type">Тип панели</Label>
-            <Select value={editForm.type} onValueChange={(value) => setEditForm({ ...editForm, type: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Выберите тип панели" />
-              </SelectTrigger>
-              <SelectContent>
-                {PANEL_TYPES.map((type) => (
-                  <SelectItem key={type.id} value={type.id}>
-                    <div className="flex items-center">
-                      <type.icon className="mr-2 h-4 w-4" />
-                      <span>{type.name}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-description">Описание</Label>
+              <Textarea
+                id="edit-description"
+                value={editForm.description}
+                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                placeholder="Введите описание панели"
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label>Размер и позиция</Label>
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <Label className="text-sm">Ширина</Label>
-                <Input
-                  type="number"
-                  value={editForm.width}
-                  onChange={(e) => setEditForm({ ...editForm, width: Number(e.target.value) })}
-                  min="1"
-                  max="24"
-                />
-              </div>
-              <div>
-                <Label className="text-sm">Высота</Label>
-                <Input
-                  type="number"
-                  value={editForm.height}
-                  onChange={(e) => setEditForm({ ...editForm, height: Number(e.target.value) })}
-                  min="1"
-                  max="20"
-                />
-              </div>
-              <div className="flex items-center justify-center pt-6">
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    checked={editForm.transparent}
-                    onCheckedChange={(checked) => setEditForm({ ...editForm, transparent: checked })}
+            <div className="space-y-2">
+              <Label htmlFor="edit-type">Тип панели</Label>
+              <Select value={editForm.type} onValueChange={(value) => setEditForm({ ...editForm, type: value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Выберите тип панели" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PANEL_TYPES.map((type) => (
+                    <SelectItem key={type.id} value={type.id}>
+                      <div className="flex items-center">
+                        <type.icon className="mr-2 h-4 w-4" />
+                        <span>{type.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Размер и позиция</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <Label className="text-sm">Ширина</Label>
+                  <Input
+                    type="number"
+                    value={editForm.width}
+                    onChange={(e) => setEditForm({ ...editForm, width: Number(e.target.value) })}
+                    min="1"
+                    max="24"
                   />
-                  <Label className="text-sm">Прозрачный</Label>
+                </div>
+                <div>
+                  <Label className="text-sm">Высота</Label>
+                  <Input
+                    type="number"
+                    value={editForm.height}
+                    onChange={(e) => setEditForm({ ...editForm, height: Number(e.target.value) })}
+                    min="1"
+                    max="20"
+                  />
+                </div>
+                <div className="flex items-center justify-center pt-6">
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      checked={editForm.transparent}
+                      onCheckedChange={(checked) => setEditForm({ ...editForm, transparent: checked })}
+                    />
+                    <Label className="text-sm">Прозрачный</Label>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          </TabsContent>
 
-          <div className="pt-6 space-x-2 flex items-center justify-end w-full">
-            <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>
-              Отмена
-            </Button>
-            <Button onClick={handleUpdatePanel} disabled={!editForm.title || !editForm.type || !editForm.dataSource}>
-              Сохранить
-            </Button>
-          </div>
+          <TabsContent value="queries" className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-dataSource">Источник данных</Label>
+              <Select
+                value={editForm.dataSource}
+                onValueChange={(value) => setEditForm({ ...editForm, dataSource: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Выберите источник данных" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DATA_SOURCES.map((source) => (
+                    <SelectItem key={source.id} value={source.id}>
+                      {source.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-alias">Псевдоним для легенды</Label>
+              <Input
+                id="edit-alias"
+                value={editForm.alias}
+                onChange={(e) => setEditForm({ ...editForm, alias: e.target.value })}
+                placeholder="Введите псевдоним"
+              />
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <Label className="text-base font-medium">Параметры запроса</Label>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-minInterval">Мин. интервал</Label>
+                  <Select
+                    value={editForm.minInterval}
+                    onValueChange={(value) => setEditForm({ ...editForm, minInterval: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Авто" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Авто</SelectItem>
+                      <SelectItem value="1s">1 секунда</SelectItem>
+                      <SelectItem value="5s">5 секунд</SelectItem>
+                      <SelectItem value="10s">10 секунд</SelectItem>
+                      <SelectItem value="30s">30 секунд</SelectItem>
+                      <SelectItem value="1m">1 минута</SelectItem>
+                      <SelectItem value="5m">5 минут</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-relativeTime">Относительное время</Label>
+                  <Input
+                    id="edit-relativeTime"
+                    value={editForm.relativeTime}
+                    onChange={(e) => setEditForm({ ...editForm, relativeTime: e.target.value })}
+                    placeholder="Например: -1h"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-timeShift">Сдвиг времени</Label>
+                  <Input
+                    id="edit-timeShift"
+                    value={editForm.timeShift}
+                    onChange={(e) => setEditForm({ ...editForm, timeShift: e.target.value })}
+                    placeholder="Например: 1d"
+                  />
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="visualization" className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-unit">Единица измерения</Label>
+              <Select
+                value={editForm.unit}
+                onValueChange={(value) => setEditForm({ ...editForm, unit: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Выберите единицу" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Без единицы</SelectItem>
+                  <SelectItem value="percent">Проценты (%)</SelectItem>
+                  <SelectItem value="bytes">Байты (B)</SelectItem>
+                  <SelectItem value="bits">Биты (bit)</SelectItem>
+                  <SelectItem value="seconds">Секунды (s)</SelectItem>
+                  <SelectItem value="milliseconds">Миллисекунды (ms)</SelectItem>
+                  <SelectItem value="requests">Запросы/сек</SelectItem>
+                  <SelectItem value="ops">Операции/сек</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Separator />
+
+            {getVisualizationFields()}
+          </TabsContent>
+
+          <TabsContent value="display" className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-base font-medium">Подсказки (Tooltip)</Label>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Режим</Label>
+                  <Select
+                    value={editForm.tooltipMode}
+                    onValueChange={(value) => setEditForm({ ...editForm, tooltipMode: value as "single" | "multi" | "none" })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="single">Одно значение</SelectItem>
+                      <SelectItem value="multi">Все значения</SelectItem>
+                      <SelectItem value="none">Отключено</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Сортировка</Label>
+                  <Select
+                    value={editForm.tooltipSort}
+                    onValueChange={(value) => setEditForm({ ...editForm, tooltipSort: value as "none" | "asc" | "desc" })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Без сортировки</SelectItem>
+                      <SelectItem value="asc">По возрастанию</SelectItem>
+                      <SelectItem value="desc">По убыванию</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
+
+        <div className="pt-6 space-x-2 flex items-center justify-end w-full">
+          <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>
+            Отмена
+          </Button>
+          <Button onClick={handleUpdatePanel} disabled={!editForm.title || !editForm.type || !editForm.dataSource}>
+            Сохранить
+          </Button>
         </div>
       </Modal>
 

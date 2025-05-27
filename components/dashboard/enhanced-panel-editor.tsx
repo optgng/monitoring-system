@@ -54,15 +54,22 @@ export function EnhancedPanelEditor({
   const [formData, setFormData] = useState<Partial<Panel>>({
     title: '',
     description: '',
-    type: 'timeseries',
+    type: 'timeseries', // Используем современный тип вместо устаревшего 'graph'
     gridPos: { h: 8, w: 12, x: 0, y: 0 },
-    targets: [{ expr: '', refId: 'A' }],
+    targets: [{
+      expr: '',
+      refId: 'A',
+      datasource: { // Обязательно указываем datasource для target
+        type: 'prometheus',
+        uid: 'prometheus'
+      }
+    }],
     fieldConfig: {
       defaults: {},
       overrides: []
     },
     options: {},
-    datasource: {
+    datasource: { // Обязательно указываем datasource на уровне панели
       type: 'prometheus',
       uid: 'prometheus'
     }
@@ -85,7 +92,14 @@ export function EnhancedPanelEditor({
         description: '',
         type: 'timeseries',
         gridPos: { h: 8, w: 12, x: 0, y: 0 },
-        targets: [{ expr: '', refId: 'A' }],
+        targets: [{
+          expr: '',
+          refId: 'A',
+          datasource: {
+            type: 'prometheus',
+            uid: 'prometheus'
+          }
+        }],
         fieldConfig: {
           defaults: {},
           overrides: []
@@ -103,16 +117,32 @@ export function EnhancedPanelEditor({
     setFormData(prev => ({ ...prev, ...updates }))
   }
 
+  // Обновляем updateTarget для обеспечения наличия datasource
   const updateTarget = (index: number, updates: Partial<Target>) => {
     const newTargets = [...(formData.targets || [])]
+    // Убедимся, что у цели есть datasource
+    if (!newTargets[index].datasource) {
+      newTargets[index].datasource = formData.datasource || {
+        type: 'prometheus',
+        uid: 'prometheus'
+      }
+    }
     newTargets[index] = { ...newTargets[index], ...updates }
     updateFormData({ targets: newTargets })
   }
 
+  // Обновляем addTarget для добавления datasource в новую цель
   const addTarget = () => {
     const newTargets = [...(formData.targets || [])]
     const nextRefId = String.fromCharCode(65 + newTargets.length) // A, B, C, ...
-    newTargets.push({ expr: '', refId: nextRefId })
+    newTargets.push({
+      expr: '',
+      refId: nextRefId,
+      datasource: formData.datasource || { // Добавляем datasource для новой цели
+        type: 'prometheus',
+        uid: 'prometheus'
+      }
+    })
     updateFormData({ targets: newTargets })
   }
 
@@ -146,6 +176,7 @@ export function EnhancedPanelEditor({
     return !hasInvalidQueries
   }
 
+  // Обновляем handleSave для обеспечения правильной структуры запроса
   const handleSave = async () => {
     if (!canSave()) {
       toast.error('Пожалуйста, исправьте все ошибки перед сохранением')
@@ -154,15 +185,28 @@ export function EnhancedPanelEditor({
 
     setIsSaving(true)
     try {
+      // Убедимся, что у всех targets есть datasource
+      const targets = formData.targets?.map(target => ({
+        ...target,
+        datasource: target.datasource || formData.datasource || {
+          type: 'prometheus',
+          uid: 'prometheus'
+        }
+      })) || [];
+
       const panelData: Panel = {
         ...formData,
         id: panel?.id || Date.now(),
         title: formData.title!,
         type: formData.type!,
         gridPos: formData.gridPos!,
-        targets: formData.targets || [],
+        targets: targets,
         fieldConfig: formData.fieldConfig || { defaults: {}, overrides: [] },
-        options: formData.options || {}
+        options: formData.options || {},
+        datasource: formData.datasource || { // Убедимся, что у панели есть datasource
+          type: 'prometheus',
+          uid: 'prometheus'
+        }
       }
 
       if (mode === 'create') {
@@ -192,8 +236,11 @@ export function EnhancedPanelEditor({
     }
   }
 
+  // Проверим модальное окно и убедимся, что оно корректно открывается
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!open) onClose();
+    }}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -212,8 +259,8 @@ export function EnhancedPanelEditor({
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Template picker для режима создания */}
-          {mode === 'create' && (
+          {/* Удаляем шаблоны для панелей */}
+          {/* {mode === 'create' && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Выбор шаблона</CardTitle>
@@ -230,7 +277,7 @@ export function EnhancedPanelEditor({
                 />
               </CardContent>
             </Card>
-          )}
+          )} */}
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-4">

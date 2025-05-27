@@ -1,161 +1,235 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useRouter } from "next/navigation"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import {
-  Plus,
-  Settings,
-  Star,
-  Copy,
-  Trash2,
-  MoreHorizontal,
-  Loader2,
-  Download,
-  RefreshCw,
-  Upload,
-  Eye,
-  Edit,
-  Calendar,
-  BarChart3,
-  AlertTriangle,
-  CheckCircle
+  Settings, Calendar, Plus, RefreshCw, Filter, Star, StarOff, XCircle,
+  Pencil, Copy, Trash2, MoreVertical, Eye, ExternalLink
 } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import { dashboardApi, DashboardListItem } from "@/lib/dashboard-api"
+import { formatDate } from "@/lib/utils"
+import { getTagStyle } from "@/lib/tag-colors"
+import { DashboardFilterPanel, DashboardFilters } from "@/components/dashboard/dashboard-filter-panel"
+import { toast } from "sonner"
+import { AlertModal } from "@/components/ui/alert-modal"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { getDashboards, deleteDashboard, duplicateDashboard } from "./actions"
-import { dashboardApi, DashboardListItem, Dashboard } from "@/lib/dashboard-api"
-import { getTagStyle, getTagHoverStyle } from "@/lib/tag-colors"
-import { DashboardFilterPanel, DashboardFilters } from "@/components/dashboard/dashboard-filter-panel"
-import { DashboardImportExport } from "@/components/dashboard/dashboard-import-export"
-import { toast } from "sonner"
 
 export default function EnhancedDashboardsPage() {
   const [dashboards, setDashboards] = useState<DashboardListItem[]>([])
   const [filteredDashboards, setFilteredDashboards] = useState<DashboardListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [dashboardToDelete, setDashboardToDelete] = useState<DashboardListItem | null>(null)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const router = useRouter()
 
-  // Filter state
+  // Фильтры
   const [filters, setFilters] = useState<DashboardFilters>({
-    search: '',
+    search: "",
     tags: [],
-    starred: undefined,
-    limit: undefined,
-    sortBy: 'title',
-    sortOrder: 'asc',
-    dateRange: undefined
+    sortBy: "title",
+    sortOrder: "asc",
   })
 
-  // Modal states
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
-  const [dashboardToDelete, setDashboardToDelete] = useState<DashboardListItem | null>(null)
-  const [isResultModalOpen, setIsResultModalOpen] = useState(false)
-  const [resultModal, setResultModal] = useState({ title: "", description: "", type: "success" })
+  // Функция для обновления конкретного дашборда в списке
+  const updateDashboardInList = useCallback((updatedDashboard: DashboardListItem) => {
+    setDashboards(prev => prev.map(d =>
+      d.uid === updatedDashboard.uid ? updatedDashboard : d
+    ))
+  }, [])
 
-  const router = useRouter()
-  const searchParams = useSearchParams()
+  // Функция для добавления нового дашборда в список
+  const addDashboardToList = useCallback((newDashboard: DashboardListItem) => {
+    setDashboards(prev => [newDashboard, ...prev])
+  }, [])
 
-  // Получаем тег из URL при загрузке
-  useEffect(() => {
-    const tagFromUrl = searchParams.get('tag')
-    if (tagFromUrl) {
-      setFilters(prev => ({ ...prev, tags: [tagFromUrl] }))
-    }
-  }, [searchParams])
+  // Загрузка дашбордов - убираем все зависимости от filters
+  const loadDashboards = useCallback(async (showRefreshing = false, customSearch = '', customTags: string[] = []) => {
+    console.log('loadDashboards called with:', { showRefreshing, customSearch, customTags });
 
-  // Загрузка дашбордов
-  const loadDashboards = useCallback(async (useFilters = false) => {
-    try {
+    if (showRefreshing) {
+      setRefreshing(true)
+    } else {
       setLoading(true)
-      let response
+    }
+    setError(null)
 
-      if (useFilters) {
-        // Используем расширенный API с фильтрами
-        const filterParams = {
-          ...(filters.search && { search: filters.search }),
-          ...(filters.tags.length > 0 && { tag: filters.tags[0] }), // API поддерживает один тег
-          ...(filters.starred !== undefined && { starred: filters.starred }),
-          ...(filters.limit && { limit: filters.limit })
-        }
-        response = await dashboardApi.listDashboardsWithFilters(filterParams)
+    try {
+      const response = await dashboardApi.listDashboards({
+        search: customSearch || filters.search,
+        tags: customTags.length > 0 ? customTags.join(',') : (filters.tags.length > 0 ? filters.tags.join(',') : undefined),
+        limit: filters.limit,
+      })
+
+      if (response.status === 'success') {
+        const dashboardsData = Array.isArray(response.data) ? response.data : []
+        console.log('Dashboards loaded:', dashboardsData.length);
+        setDashboards(dashboardsData)
       } else {
-        // Используем базовый API
-        response = await getDashboards()
-      } if (response.status === "success") {
-        const dashboardData = Array.isArray(response.data) ? response.data : [response.data]
-        setDashboards(dashboardData)
-        if (!useFilters) {
-          setFilteredDashboards(dashboardData)
-        }
-      } else {
-        toast.error(response.message || "Не удалось загрузить дашборды")
+        setError(response.message || "Не удалось загрузить дашборды")
       }
     } catch (error) {
-      console.error('Ошибка загрузки дашбордов:', error)
-      toast.error("Произошла ошибка при загрузке дашбордов")
+      console.error("Ошибка при загрузке дашбордов:", error)
+      setError("Произошла ошибка при загрузке дашбордов")
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [filters])
+  }, []) // Убираем ВСЕ зависимости
 
-  // Применение локальных фильтров
-  const applyLocalFilters = useCallback(() => {
+  // Обработчик изменения фильтров
+  const handleFiltersChange = (newFilters: DashboardFilters) => {
+    setFilters(newFilters)
+  }
+
+  // Функция для удаления дашборда - динамическое обновление
+  const handleDeleteDashboard = async () => {
+    if (!dashboardToDelete) return;
+
+    console.log('Deleting dashboard:', dashboardToDelete.uid);
+
+    try {
+      setRefreshing(true);
+      const response = await dashboardApi.deleteDashboard(dashboardToDelete.uid);
+      console.log('Delete response:', response);
+
+      // Проверяем успешность по разным вариантам ответа
+      if (response.status === 'success' || response.message === 'Dashboard deleted successfully') {
+        console.log('Dashboard deleted successfully, updating list...');
+
+        // Закрываем модальное окно
+        setIsDeleteModalOpen(false);
+        setDashboardToDelete(null);
+
+        // Динамически удаляем дашборд из списка
+        setDashboards(prev => prev.filter(d => d.uid !== dashboardToDelete.uid));
+
+        // Показываем toast
+        toast.success("Дашборд успешно удален");
+
+      } else {
+        console.error('Delete failed:', response);
+        toast.error(response.message || "Не удалось удалить дашборд");
+      }
+    } catch (error) {
+      console.error("Ошибка при удалении дашборда:", error);
+      toast.error("Произошла ошибка при удалении дашборда");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Функция для дублирования дашборда - динамическое обновление
+  const handleDuplicateDashboard = async (dashboard: DashboardListItem) => {
+    if (!dashboard.uid) {
+      toast.error("UID дашборда не найден, невозможно дублировать.");
+      return;
+    }
+
+    console.log('Duplicating dashboard:', dashboard.uid);
+
+    try {
+      setRefreshing(true);
+      const response = await dashboardApi.duplicateDashboard(dashboard.uid);
+      console.log('Duplicate response:', response);
+
+      // Проверяем успешность - если нет явной ошибки, считаем успешным
+      const hasError = response.status === 'error';
+      const isSuccess = response.status === 'success' || response.data || !hasError;
+
+      if (isSuccess && !hasError) {
+        console.log('Dashboard duplicated successfully');
+
+        toast.success("Дашборд успешно дублирован");
+
+        // Если есть данные о новом дашборде, добавляем его в список
+        if (response.data && response.data.uid) {
+          const newDashboard: DashboardListItem = {
+            uid: response.data.uid,
+            title: response.data.title || `${dashboard.title} (копия)`,
+            description: response.data.description || dashboard.description || "",
+            tags: response.data.tags || dashboard.tags || [],
+            isStarred: false,
+            created: response.data.created || new Date().toISOString(),
+            updated: response.data.updated || new Date().toISOString(),
+            panelCount: response.data.panels ? response.data.panels.length : (dashboard.panelCount || 0)
+          };
+
+          // Динамически добавляем новый дашборд в начало списка
+          setDashboards(prev => [newDashboard, ...prev]);
+
+          // Предлагаем перейти к новому дашборду
+          const shouldRedirect = confirm("Хотите перейти к новому дашборду?");
+          if (shouldRedirect) {
+            console.log('Redirecting to new dashboard...');
+            router.push(`/dashboards/${response.data.uid}`);
+            return;
+          }
+        } else {
+          // Если нет данных о новом дашборде, просто перезагружаем список
+          console.log('No new dashboard data, reloading list...');
+          await loadDashboards(true, filters.search, filters.tags);
+        }
+
+      } else {
+        console.error('Duplicate failed:', response);
+        toast.error(response.message || "Не удалось дублировать дашборд");
+      }
+    } catch (error) {
+      console.error("Ошибка при дублировании дашборда:", error);
+      toast.error("Произошла ошибка при дублировании дашборда");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // УПРОЩЕННЫЕ useEffect - убираем все конфликты
+
+  // Только начальная загрузка
+  useEffect(() => {
+    console.log('Initial load useEffect triggered');
+    loadDashboards();
+  }, []); // Пустой массив зависимостей
+
+  // Применение локальных фильтров - убираем зависимость от applyLocalFilters
+  useEffect(() => {
+    console.log('Applying local filters to dashboards:', dashboards.length);
+
     let filtered = [...dashboards]
 
-    // Поиск по названию и описанию
+    // Применяем поиск локально
     if (filters.search) {
       const searchLower = filters.search.toLowerCase()
-      filtered = filtered.filter(dashboard =>
-        dashboard.title.toLowerCase().includes(searchLower) ||
-        (dashboard.description && dashboard.description.toLowerCase().includes(searchLower))
+      filtered = filtered.filter(
+        dashboard =>
+          dashboard.title.toLowerCase().includes(searchLower) ||
+          (dashboard.description && dashboard.description.toLowerCase().includes(searchLower))
       )
     }
 
-    // Фильтр по тегам
+    // Применяем фильтр по тегам локально
     if (filters.tags.length > 0) {
       filtered = filtered.filter(dashboard =>
-        filters.tags.some(tag => dashboard.tags.includes(tag))
+        filters.tags.every(tag => dashboard.tags.includes(tag))
       )
     }
 
-    // Фильтр по избранным
-    if (filters.starred !== undefined) {
-      filtered = filtered.filter(dashboard => dashboard.isStarred === filters.starred)
-    }
-
-    // Фильтр по дате
-    if (filters.dateRange?.from || filters.dateRange?.to) {
-      filtered = filtered.filter(dashboard => {
-        const createdDate = new Date(dashboard.created)
-        const fromDate = filters.dateRange?.from ? new Date(filters.dateRange.from) : null
-        const toDate = filters.dateRange?.to ? new Date(filters.dateRange.to) : null
-
-        if (fromDate && createdDate < fromDate) return false
-        if (toDate && createdDate > toDate) return false
-        return true
-      })
-    }
-
-    // Сортировка
+    // Сортировка результатов
     filtered.sort((a, b) => {
-      let aValue: any, bValue: any
+      let aValue, bValue
 
       switch (filters.sortBy) {
         case 'title':
@@ -163,406 +237,292 @@ export default function EnhancedDashboardsPage() {
           bValue = b.title.toLowerCase()
           break
         case 'created':
-          aValue = new Date(a.created)
-          bValue = new Date(b.created)
+          aValue = new Date(a.created || '').getTime() || 0
+          bValue = new Date(b.created || '').getTime() || 0
           break
         case 'updated':
-          aValue = new Date(a.updated)
-          bValue = new Date(b.updated)
+          aValue = new Date(a.updated || '').getTime() || 0
+          bValue = new Date(b.updated || '').getTime() || 0
           break
         case 'panelCount':
-          aValue = a.panelCount || 0
-          bValue = b.panelCount || 0
+          aValue = typeof a.panelCount === 'number' ? a.panelCount : 0
+          bValue = typeof b.panelCount === 'number' ? b.panelCount : 0
           break
         default:
-          return 0
+          aValue = a.title.toLowerCase()
+          bValue = b.title.toLowerCase()
       }
 
-      if (aValue < bValue) return filters.sortOrder === 'asc' ? -1 : 1
-      if (aValue > bValue) return filters.sortOrder === 'asc' ? 1 : -1
+      const sortFactor = filters.sortOrder === 'asc' ? 1 : -1
+
+      if (aValue < bValue) return -1 * sortFactor
+      if (aValue > bValue) return 1 * sortFactor
       return 0
     })
 
-    // Лимит
-    if (filters.limit) {
+    // Ограничение количества результатов
+    if (filters.limit && filters.limit > 0) {
       filtered = filtered.slice(0, filters.limit)
     }
 
-    setFilteredDashboards(filtered)
-  }, [dashboards, filters])
+    console.log('Filtered dashboards:', filtered.length);
+    setFilteredDashboards(filtered);
+  }, [dashboards, filters.search, filters.tags, filters.sortBy, filters.sortOrder, filters.limit]);
 
-  // Загрузка при монтировании
+  // Обработчик фильтрации - реагируем на изменения поиска и тегов
   useEffect(() => {
-    loadDashboards()
-  }, [])
+    console.log('Filters changed, reloading from API:', { search: filters.search, tags: filters.tags });
 
-  // Применение фильтров при их изменении
+    // Используем таймер для debounce
+    const timer = setTimeout(() => {
+      if (dashboards.length > 0) { // Загружаем только если уже есть данные
+        loadDashboards(true, filters.search, filters.tags);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [filters.search, filters.tags]);
+
+  // Обработчик события применения фильтров - УПРОЩАЕМ
   useEffect(() => {
-    applyLocalFilters()
-  }, [applyLocalFilters])
+    const handleApplyFilters = () => {
+      console.log('Apply filters event received - forcing reload');
+      loadDashboards(true, filters.search, filters.tags);
+    };
 
-  const handleRefresh = () => {
-    setRefreshing(true)
-    loadDashboards()
-  }
+    window.addEventListener('apply-dashboard-filters', handleApplyFilters);
 
-  const handleApplyFilters = () => {
-    // Можно использовать как локальную фильтрацию, так и серверную
-    applyLocalFilters()
-    toast.success("Фильтры применены")
-  }
+    return () => {
+      window.removeEventListener('apply-dashboard-filters', handleApplyFilters);
+    };
+  }, [filters.search, filters.tags]); // Добавляем зависимости
 
-  const handleDeleteClick = (dashboard: DashboardListItem) => {
-    setDashboardToDelete(dashboard)
-    setIsDeleteModalOpen(true)
-  }
-
-  const handleDelete = async () => {
-    if (!dashboardToDelete) return
-
-    try {
-      const response = await deleteDashboard(dashboardToDelete.uid)
-      if (response.status === "success") {
-        setDashboards(prev => prev.filter(d => d.uid !== dashboardToDelete.uid))
-        toast.success("Дашборд успешно удален")
-      } else {
-        toast.error(response.message || "Не удалось удалить дашборд")
-      }
-    } catch (error) {
-      toast.error("Произошла ошибка при удалении дашборда")
-    } finally {
-      setIsDeleteModalOpen(false)
-      setDashboardToDelete(null)
-    }
-  }
-
-  const handleDuplicate = async (dashboard: DashboardListItem) => {
-    try {
-      const newTitle = `${dashboard.title} (Copy)`
-      const response = await duplicateDashboard(dashboard.uid, newTitle)
-      if (response.status === "success") {
-        await loadDashboards()
-        toast.success("Дашборд успешно дублирован")
-      } else {
-        toast.error(response.message || "Не удалось дублировать дашборд")
-      }
-    } catch (error) {
-      toast.error("Произошла ошибка при дублировании дашборда")
-    }
-  }
-
-  const handleExport = async (dashboard: DashboardListItem) => {
-    try {
-      const response = await dashboardApi.exportDashboard(dashboard.uid)
-      if (response.status === "success") {
-        // Создаем файл для скачивания
-        const dataStr = JSON.stringify(response.data, null, 2)
-        const dataBlob = new Blob([dataStr], { type: 'application/json' })
-        const url = URL.createObjectURL(dataBlob)
-
-        const link = document.createElement('a')
-        link.href = url
-        link.download = `dashboard-${dashboard.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}-${Date.now()}.json`
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        URL.revokeObjectURL(url)
-
-        toast.success("Дашборд экспортирован")
-      } else {
-        toast.error(response.message || "Не удалось экспортировать дашборд")
-      }
-    } catch (error) {
-      toast.error("Произошла ошибка при экспорте дашборда")
-    }
-  }
-
-  const handleImportSuccess = async (dashboard: Dashboard) => {
-    await loadDashboards()
-    toast.success(`Дашборд "${dashboard.title}" успешно импортирован`)
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ru-RU', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
-
-  if (loading) {
+  // Отображение страницы при загрузке
+  if (loading && !refreshing) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="flex items-center gap-2">
-            <Loader2 className="h-6 w-6 animate-spin" />
-            <span>Загрузка дашбордов...</span>
+      <div className="container mx-auto p-6 space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold">Дашборды</h1>
+          <div className="flex space-x-2">
+            <Skeleton className="h-10 w-36" />
+            <Skeleton className="h-10 w-36" />
           </div>
         </div>
+
+        <Skeleton className="w-full h-64" />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => (
+            <Skeleton key={i} className="w-full h-48" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // Отображаем ошибку
+  if (error) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold">Дашборды</h1>
+          <Button variant="outline" onClick={() => loadDashboards()}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Повторить загрузку
+          </Button>
+        </div>
+
+        <Card className="w-full bg-destructive/10 border-destructive/20">
+          <CardHeader>
+            <CardTitle className="flex items-center text-destructive">
+              <XCircle className="mr-2 h-5 w-5" />
+              Ошибка загрузки
+            </CardTitle>
+            <CardDescription>{error}</CardDescription>
+          </CardHeader>
+        </Card>
       </div>
     )
   }
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Дашборды</h1>
-          <p className="text-muted-foreground">
-            Управление дашбордами мониторинга
-          </p>
-        </div>
-        <div className="flex gap-2">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold">Дашборды</h1>
+        <div className="flex space-x-2">
           <Button
             variant="outline"
-            onClick={handleRefresh}
+            onClick={() => loadDashboards(true)}
             disabled={refreshing}
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             Обновить
           </Button>
-          <DashboardImportExport
-            onImportSuccess={handleImportSuccess}
-            trigger={
-              <Button variant="outline">
-                <Upload className="h-4 w-4 mr-2" />
-                Импорт
-              </Button>
-            }
-          />
           <Button onClick={() => router.push('/dashboards/new')}>
-            <Plus className="h-4 w-4 mr-2" />
+            <Plus className="mr-2 h-4 w-4" />
             Создать дашборд
           </Button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Всего дашбордов</CardTitle>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{dashboards.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Отфильтровано</CardTitle>
-            <Eye className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{filteredDashboards.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Избранные</CardTitle>
-            <Star className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {dashboards.filter(d => d.isStarred).length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Всего панелей</CardTitle>
-            <Settings className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {dashboards.reduce((sum, d) => sum + (d.panelCount || 0), 0)}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters */}
       <DashboardFilterPanel
         filters={filters}
-        onFiltersChange={setFilters}
+        onFiltersChange={handleFiltersChange}
         dashboards={dashboards}
         isLoading={refreshing}
-        onApplyFilters={handleApplyFilters}
       />
 
-      {/* Dashboards Grid */}
-      {filteredDashboards.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <BarChart3 className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Дашборды не найдены</h3>
-            <p className="text-muted-foreground text-center mb-4">
-              {dashboards.length === 0
-                ? "Создайте свой первый дашборд для начала работы"
-                : "Попробуйте изменить фильтры или поисковый запрос"
-              }
-            </p>
-            <Button onClick={() => router.push('/dashboards/new')}>
-              <Plus className="h-4 w-4 mr-2" />
-              Создать дашборд
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {filteredDashboards.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredDashboards.map((dashboard) => (
-            <Card key={dashboard.uid} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <CardTitle className="text-lg line-clamp-1">
-                        {dashboard.title}
-                      </CardTitle>
-                      {dashboard.isStarred && (
-                        <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                      )}
-                    </div>
-                    {dashboard.description && (
-                      <CardDescription className="line-clamp-2">
+            <Card
+              key={dashboard.uid || `dashboard-${Math.random()}`}
+              className="hover:shadow-lg transition-shadow group"
+            >
+              <CardHeader className="pb-2">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1 cursor-pointer" onClick={() => router.push(`/dashboards/${dashboard.uid}`)}>
+                    <CardTitle className="line-clamp-1">{dashboard.title}</CardTitle>
+                    {dashboard.description ? (
+                      <CardDescription className="line-clamp-2 pt-1">
                         {dashboard.description}
+                      </CardDescription>
+                    ) : (
+                      <CardDescription className="line-clamp-2 pt-1">
+                        &nbsp;
                       </CardDescription>
                     )}
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => router.push(`/dashboards/${dashboard.uid}`)}>
-                        <Eye className="h-4 w-4 mr-2" />
-                        Просмотр
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => router.push(`/dashboards/${dashboard.uid}/edit`)}>
-                        <Edit className="h-4 w-4 mr-2" />
-                        Редактировать
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => handleDuplicate(dashboard)}>
-                        <Copy className="h-4 w-4 mr-2" />
-                        Дублировать
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleExport(dashboard)}>
-                        <Download className="h-4 w-4 mr-2" />
-                        Экспортировать
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => handleDeleteClick(dashboard)}
-                        className="text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Удалить
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+
+                  <div className="flex">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Действия</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => router.push(`/dashboards/${dashboard.uid}`)}>
+                          <Eye className="h-4 w-4 mr-2" />
+                          Просмотр
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => router.push(`/dashboards/${dashboard.uid}/edit`)}>
+                          <Pencil className="h-4 w-4 mr-2" />
+                          Редактировать
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDuplicateDashboard(dashboard);
+                          }}
+                        >
+                          <Copy className="h-4 w-4 mr-2" />
+                          Дублировать
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDashboardToDelete(dashboard);
+                            setIsDeleteModalOpen(true);
+                          }}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Удалить
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="cursor-pointer" onClick={() => router.push(`/dashboards/${dashboard.uid}`)}>
                 <div className="space-y-3">
-                  {/* Tags */}
                   {dashboard.tags && dashboard.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {dashboard.tags.slice(0, 3).map((tag) => (
-                        <Badge
-                          key={tag}
-                          variant="secondary"
-                          className="text-xs cursor-pointer"
-                          style={getTagStyle(tag)}
-                          onClick={() => setFilters(prev => ({
-                            ...prev,
-                            tags: prev.tags.includes(tag) ? prev.tags : [...prev.tags, tag]
-                          }))}
-                        >
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {dashboard.tags.map((tag) => (
+                        <Badge key={tag} variant="outline" style={getTagStyle(tag)}>
                           {tag}
                         </Badge>
                       ))}
-                      {dashboard.tags.length > 3 && (
-                        <Badge variant="outline" className="text-xs">
-                          +{dashboard.tags.length - 3}
-                        </Badge>
-                      )}
                     </div>
                   )}
 
-                  {/* Stats */}
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <div className="flex items-center gap-4">
                       <span className="flex items-center gap-1">
                         <Settings className="h-3 w-3" />
-                        {dashboard.panelCount || 0} панелей
+                        {dashboard.panelCount !== undefined ?
+                          `${dashboard.panelCount} ${dashboard.panelCount === 1 ? 'панель' :
+                            (dashboard.panelCount >= 2 && dashboard.panelCount <= 4) ? 'панели' : 'панелей'}` :
+                          'Загрузка...'
+                        }
                       </span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
-                      {formatDate(dashboard.updated)}
+                      {dashboard.updated ? formatDate(dashboard.updated || "") : formatDate(dashboard.created || "")}
                     </div>
-                  </div>
-
-                  {/* Action buttons */}
-                  <div className="flex gap-2 pt-2">
-                    <Button
-                      size="sm"
-                      onClick={() => router.push(`/dashboards/${dashboard.uid}`)}
-                      className="flex-1"
-                    >
-                      <Eye className="h-3 w-3 mr-1" />
-                      Открыть
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => router.push(`/dashboards/${dashboard.uid}/edit`)}
-                    >
-                      <Edit className="h-3 w-3" />
-                    </Button>
                   </div>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
+      ) : (
+        <Card className="w-full py-16">
+          <CardContent className="flex flex-col items-center justify-center text-center space-y-4">
+            <div className="p-3 bg-muted rounded-full">
+              {dashboards.length === 0 ? (
+                <Plus className="h-8 w-8 text-muted-foreground" />
+              ) : (
+                <Filter className="h-8 w-8 text-muted-foreground" />
+              )}
+            </div>
+            <CardTitle>
+              {dashboards.length === 0 ? "Нет дашбордов" : "Дашборды не найдены"}
+            </CardTitle>
+            <CardDescription className="max-w-[400px]">
+              {dashboards.length === 0
+                ? "У вас еще нет дашбордов. Создайте первый дашборд для начала мониторинга."
+                : "По заданным критериям фильтрации не найдено ни одного дашборда."}
+            </CardDescription>
+            {dashboards.length === 0 ? (
+              <Button onClick={() => router.push('/dashboards/new')}>
+                <Plus className="mr-2 h-4 w-4" />
+                Создать дашборд
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                onClick={() =>
+                  handleFiltersChange({
+                    search: "",
+                    tags: [],
+                    sortBy: "title",
+                    sortOrder: "asc",
+                  })
+                }
+              >
+                Сбросить фильтры
+              </Button>
+            )}
+          </CardContent>
+        </Card>
       )}
-
-      {/* Delete Confirmation Modal */}
-      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              Удаление дашборда
-            </DialogTitle>
-            <DialogDescription>
-              Вы уверены, что хотите удалить дашборд "{dashboardToDelete?.title}"?
-              Это действие нельзя отменить.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setIsDeleteModalOpen(false)}
-            >
-              Отмена
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-            >
-              Удалить
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <AlertModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDeleteDashboard}
+        loading={refreshing}
+        title="Удалить дашборд"
+        description={`Вы уверены, что хотите удалить дашборд "${dashboardToDelete?.title}"? Это действие нельзя отменить.`}
+      />
     </div>
   )
 }
